@@ -182,6 +182,34 @@ final class TextInserter {
 
 enum TextInsertionPolicy {
     private static let pastePreferredBundleIdentifiers: Set<String> = [
+        // Web fields often expose writable Accessibility attributes without
+        // dispatching the DOM input event expected by the page. A real paste
+        // event is more reliable for search boxes, editors, and form controls.
+        "com.apple.safari",
+        "com.apple.safaritechnologypreview",
+        "com.google.chrome",
+        "com.google.chrome.beta",
+        "com.google.chrome.canary",
+        "org.chromium.chromium",
+        "com.brave.browser",
+        "com.brave.browser.beta",
+        "com.brave.browser.nightly",
+        "com.microsoft.edgemac",
+        "com.microsoft.edgemac.beta",
+        "com.microsoft.edgemac.dev",
+        "com.microsoft.edgemac.canary",
+        "org.mozilla.firefox",
+        "org.mozilla.firefoxdeveloperedition",
+        "org.mozilla.nightly",
+        "company.thebrowser.browser",
+        "company.thebrowser.dia",
+        "com.operasoftware.opera",
+        "com.vivaldi.vivaldi",
+        "com.duckduckgo.macos.browser",
+        "com.kagi.kagimacos",
+        "com.sigmaos.sigmaos.macos",
+
+        // Hybrid editors and terminals also need a genuine key/paste event.
         "com.todesktop.230313mzl4w4u92", // Cursor
         "com.openai.codex",
         "com.microsoft.vscode",

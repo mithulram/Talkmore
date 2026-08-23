@@ -15,10 +15,11 @@ The menu-bar panel shows the route used for the most recent dictation.
 | TextEdit document | AppKit rich text | Editable text area available | Manual regression required |
 | Apple Notes editor | AppKit rich text | Editable surface available | Manual regression required |
 | Safari address/search | AppKit field | Editable field available | Manual regression required |
+| YouTube search in Safari/Chrome | Web input | DOM input event required | Paste route selected |
 | Cursor composer/editor | Electron/Monaco | Paste route selected | Verified during development |
 | Terminal prompt | Terminal text surface | Automation restricted | Manual regression required |
 
-Cursor and Codex intentionally prefer the paste route because Electron and hybrid editors do not always expose a stable editable Accessibility value. The clipboard is restored after insertion whenever macOS allows it.
+Browsers, Cursor, and Codex intentionally prefer the paste route. Website inputs can expose a writable Accessibility value without sending the DOM input event that JavaScript-controlled fields require, while Electron and hybrid editors do not always expose a stable editable Accessibility value.
 
 ## Manual regression script
 
@@ -35,3 +36,5 @@ For each app:
 The development build also accepts `SIGUSR1` as an fn press and `SIGUSR2` as an fn release. This makes repeatable timing tests possible without changing the production hotkey behavior.
 
 Never press Return in chat composers, browser address fields, or Terminal during compatibility testing.
+
+For website coverage, repeat the script in a standard text input, a JavaScript-controlled search box such as YouTube search, and a content-editable field. All three should show **Paste fallback** in Talkmore's latest compatibility summary.
