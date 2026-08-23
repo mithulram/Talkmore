@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://talkmore.prasad-6.chatgpt.site'),
+  metadataBase: new URL('https://mithulram.github.io/Talkmore/'),
   title: 'Talkmore — Your voice, already written',
   description: 'Fast, private push-to-talk dictation for Apple silicon Macs. Hold fn, speak, and release to insert clean text anywhere.',
   keywords: ['macOS dictation', 'push to talk', 'on-device speech recognition', 'Apple silicon', 'open source'],

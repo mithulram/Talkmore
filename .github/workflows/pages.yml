@@ -1,0 +1,55 @@
+name: Deploy website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Website/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: Website
+    steps:
+      - uses: actions/checkout@v6
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: Website/pnpm-lock.yaml
+      - uses: actions/configure-pages@v5
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build static website
+        run: pnpm run build:pages
+      - name: Disable Jekyll processing
+        run: touch out/.nojekyll
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: Website/out
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
