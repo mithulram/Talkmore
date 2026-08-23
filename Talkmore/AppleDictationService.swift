@@ -60,55 +60,15 @@ final class AppleDictationService {
     private var inputContinuation: AsyncStream<AnalyzerInput>.Continuation?
     private var resultTask: Task<Void, Error>?
     private var converter: AVAudioConverter?
+    private var preparedFormat: AVAudioFormat?
+    private var audioLevelHandler: AudioLevelHandler?
     private var finalizedText = ""
     private var volatileText = ""
     private var isRecording = false
     private var tapInstalled = false
 
-    static func prewarm(locale requestedLocale: Locale = .current) async {
-        do {
-            let preferredLocale = await DictationTranscriber.supportedLocale(
-                equivalentTo: requestedLocale
-            )
-            let fallbackLocale = await DictationTranscriber.supportedLocale(
-                equivalentTo: Locale(identifier: "en_US")
-            )
-            guard let locale = preferredLocale ?? fallbackLocale else { return }
-
-            let transcriber = DictationTranscriber(
-                locale: locale,
-                preset: .progressiveShortDictation
-            )
-            if let installation = try await AssetInventory.assetInstallationRequest(
-                supporting: [transcriber]
-            ) {
-                try await installation.downloadAndInstall()
-            }
-            _ = try? await AssetInventory.reserve(locale: locale)
-
-            let options = SpeechAnalyzer.Options(
-                priority: .utility,
-                modelRetention: .processLifetime
-            )
-            let analyzer = SpeechAnalyzer(modules: [transcriber], options: options)
-            guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(
-                compatibleWith: [transcriber]
-            ) else { return }
-            try await analyzer.prepareToAnalyze(in: format)
-            await analyzer.cancelAndFinishNow()
-        } catch {
-            // Prewarming is opportunistic. The normal start path still reports
-            // any actionable speech error when the user presses fn.
-        }
-    }
-
-    func start(
-        locale requestedLocale: Locale = .current,
-        contextualStrings: [String] = [],
-        onTranscript: @escaping TranscriptHandler,
-        onAudioLevel: @escaping AudioLevelHandler
-    ) async throws {
-        guard !isRecording else { return }
+    func prepare(locale requestedLocale: Locale = .current) async throws {
+        guard analyzer == nil else { return }
 
         let preferredLocale = await DictationTranscriber.supportedLocale(equivalentTo: requestedLocale)
         let fallbackLocale = await DictationTranscriber.supportedLocale(equivalentTo: Locale(identifier: "en_US"))
@@ -124,24 +84,45 @@ final class AppleDictationService {
 
         let options = SpeechAnalyzer.Options(priority: .userInitiated, modelRetention: .processLifetime)
         let analyzer = SpeechAnalyzer(modules: [transcriber], options: options)
+        guard let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else {
+            throw DictationServiceError.missingAudioFormat
+        }
+        try await analyzer.prepareToAnalyze(in: analyzerFormat)
+
+        let (stream, continuation) = AsyncStream.makeStream(of: AnalyzerInput.self)
+        try await analyzer.start(inputSequence: stream)
+
+        self.analyzer = analyzer
+        self.transcriber = transcriber
+        inputContinuation = continuation
+        preparedFormat = analyzerFormat
+        try configureAudioEngine(
+            analyzerFormat: analyzerFormat,
+            continuation: continuation
+        )
+    }
+
+    func start(
+        locale requestedLocale: Locale = .current,
+        contextualStrings: [String] = [],
+        onTranscript: @escaping TranscriptHandler,
+        onAudioLevel: @escaping AudioLevelHandler
+    ) async throws {
+        guard !isRecording else { return }
+
+        try await prepare(locale: requestedLocale)
+        guard let analyzer, let transcriber, preparedFormat != nil else {
+            throw DictationServiceError.missingAudioFormat
+        }
         if !contextualStrings.isEmpty {
             let context = AnalysisContext()
             context.contextualStrings[.general] = contextualStrings
             // Vocabulary is an accuracy enhancement, never a prerequisite for
             // transcription. Some OS builds can reject context updates while
             // speech assets are changing, so keep the base recognizer running.
-            try? await analyzer.setContext(context)
-        }
-        guard let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else {
-            throw DictationServiceError.missingAudioFormat
+            Task { try? await analyzer.setContext(context) }
         }
 
-        try await analyzer.prepareToAnalyze(in: analyzerFormat)
-
-        let (stream, continuation) = AsyncStream.makeStream(of: AnalyzerInput.self)
-        self.analyzer = analyzer
-        self.transcriber = transcriber
-        self.inputContinuation = continuation
         self.finalizedText = ""
         self.volatileText = ""
 
@@ -153,12 +134,8 @@ final class AppleDictationService {
             }
         }
 
-        try await analyzer.start(inputSequence: stream)
-        try startAudioEngine(
-            analyzerFormat: analyzerFormat,
-            continuation: continuation,
-            onAudioLevel: onAudioLevel
-        )
+        audioLevelHandler = onAudioLevel
+        try audioEngine.start()
         isRecording = true
     }
 
@@ -190,6 +167,8 @@ final class AppleDictationService {
         self.analyzer = nil
         transcriber = nil
         converter = nil
+        preparedFormat = nil
+        audioLevelHandler = nil
         return text
     }
 
@@ -208,6 +187,8 @@ final class AppleDictationService {
         analyzer = nil
         transcriber = nil
         converter = nil
+        preparedFormat = nil
+        audioLevelHandler = nil
     }
 
     private var combinedTranscript: String {
@@ -229,10 +210,9 @@ final class AppleDictationService {
         handler(combinedTranscript)
     }
 
-    private func startAudioEngine(
+    private func configureAudioEngine(
         analyzerFormat: AVAudioFormat,
-        continuation: AsyncStream<AnalyzerInput>.Continuation,
-        onAudioLevel: @escaping AudioLevelHandler
+        continuation: AsyncStream<AnalyzerInput>.Continuation
     ) throws {
         let inputNode = audioEngine.inputNode
         let microphoneFormat = inputNode.outputFormat(forBus: 0)
@@ -240,7 +220,9 @@ final class AppleDictationService {
             throw DictationServiceError.audioConversionFailed
         }
         self.converter = converter
-        let levelSampler = AudioLevelSampler(handler: onAudioLevel)
+        let levelSampler = AudioLevelSampler { [weak self] level in
+            self?.audioLevelHandler?(level)
+        }
 
         inputNode.installTap(onBus: 0, bufferSize: 1_024, format: microphoneFormat) { buffer, _ in
             levelSampler.consume(buffer)
@@ -250,7 +232,6 @@ final class AppleDictationService {
         tapInstalled = true
 
         audioEngine.prepare()
-        try audioEngine.start()
     }
 
     private static func convert(

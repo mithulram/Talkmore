@@ -31,6 +31,7 @@ final class AppCoordinator {
     private var target: TextTarget?
     private var shortcutHeld = false
     private var hasStarted = false
+    private var preparedDictationTask: Task<AppleDictationService?, Never>?
     private let logger = Logger(subsystem: "com.mithul.talkmore", category: "Dictation")
 #if DEBUG
     private var diagnosticSignalSources: [DispatchSourceSignal] = []
@@ -60,7 +61,7 @@ final class AppCoordinator {
         permissions.refresh()
         trace("Ready · \(permissionSummary)")
         if refinementEnabled { refiner.prepare() }
-        Task { await AppleDictationService.prewarm() }
+        primeDictationService()
 #if DEBUG
         installDiagnosticSignals()
 #endif
@@ -108,7 +109,7 @@ final class AppCoordinator {
         if refinementEnabled { refiner.prepare() }
 
         let sessionID = UUID()
-        let dictation = AppleDictationService()
+        let dictation = await nextDictationService()
         activeSessionID = sessionID
         activeDictation = dictation
 
@@ -131,11 +132,13 @@ final class AppCoordinator {
             state = .recording
             trace("Recording")
             overlay.update(state: state)
+            primeDictationService()
             if !shortcutHeld { await endDictation() }
         } catch {
             activeSessionID = nil
             activeDictation = nil
             await dictation.cancel()
+            primeDictationService()
             fail(error.localizedDescription)
         }
     }
@@ -343,6 +346,26 @@ final class AppCoordinator {
     private func trace(_ message: String, level: OSLogType = .info) {
         lastDiagnostic = message
         logger.log(level: level, "\(message, privacy: .public)")
+    }
+
+    private func primeDictationService() {
+        guard preparedDictationTask == nil else { return }
+        preparedDictationTask = Task {
+            let service = AppleDictationService()
+            do {
+                try await service.prepare()
+                return service
+            } catch {
+                return nil
+            }
+        }
+    }
+
+    private func nextDictationService() async -> AppleDictationService {
+        guard let preparedDictationTask else { return AppleDictationService() }
+        let service = await preparedDictationTask.value
+        self.preparedDictationTask = nil
+        return service ?? AppleDictationService()
     }
 
 #if DEBUG
