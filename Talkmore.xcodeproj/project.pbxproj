@@ -238,6 +238,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkmore needs microphone access to transcribe your speech locally.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Talkmore uses Apple's on-device speech recognition to turn your voice into text.";
 				MARKETING_VERSION = 0.1.0;
+				OTHER_CODE_SIGN_FLAGS = "--requirements $(SRCROOT)/Config/DebugCodeSigningRequirements.req";
 				PRODUCT_BUNDLE_IDENTIFIER = com.mithul.talkmore;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

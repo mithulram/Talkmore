@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import Carbon.HIToolbox
 import CoreGraphics
 
 struct TextTarget {
@@ -25,6 +26,7 @@ struct TextInsertionReceipt {
 @MainActor
 final class TextInserter {
     func captureTarget() -> TextTarget {
+        let frontmostApplication = NSWorkspace.shared.frontmostApplication
         let systemWide = AXUIElementCreateSystemWide()
         var value: CFTypeRef?
         let result = AXUIElementCopyAttributeValue(
@@ -33,13 +35,28 @@ final class TextInserter {
             &value
         )
 
-        let element = result == .success ? (value as! AXUIElement?) : nil
+        var element = result == .success ? (value as! AXUIElement?) : nil
         var pid: pid_t = 0
         if let element { AXUIElementGetPid(element, &pid) }
 
         let application = pid == 0
-            ? NSWorkspace.shared.frontmostApplication
+            ? frontmostApplication
             : NSRunningApplication(processIdentifier: pid)
+
+        // The system-wide focused element lookup can intermittently fail in
+        // Electron apps and directly after a local rebuild. Ask the frontmost
+        // application itself before falling back to simulated paste.
+        if element == nil, let application {
+            let applicationElement = AXUIElementCreateApplication(application.processIdentifier)
+            var focusedValue: CFTypeRef?
+            if AXUIElementCopyAttributeValue(
+                applicationElement,
+                kAXFocusedUIElementAttribute as CFString,
+                &focusedValue
+            ) == .success {
+                element = focusedValue as! AXUIElement?
+            }
+        }
 
         return TextTarget(
             element: element,
@@ -73,22 +90,38 @@ final class TextInserter {
         }
 
         if let pid = target.processIdentifier,
-           let app = NSRunningApplication(processIdentifier: pid) {
+           let app = NSRunningApplication(processIdentifier: pid),
+           !app.isActive {
             app.activate()
             try await Task.sleep(nanoseconds: 80_000_000)
         }
 
+        let source = CGEventSource(stateID: .hidSystemState)
         guard
-            let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: 9, keyDown: true),
-            let keyUp = CGEvent(keyboardEventSource: nil, virtualKey: 9, keyDown: false)
+            let keyDown = CGEvent(
+                keyboardEventSource: source,
+                virtualKey: CGKeyCode(kVK_ANSI_V),
+                keyDown: true
+            ),
+            let keyUp = CGEvent(
+                keyboardEventSource: source,
+                virtualKey: CGKeyCode(kVK_ANSI_V),
+                keyDown: false
+            )
         else {
             throw InsertionError.couldNotCreatePasteEvent
         }
 
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
-        keyDown.post(tap: .cgAnnotatedSessionEventTap)
-        keyUp.post(tap: .cgAnnotatedSessionEventTap)
+        if let pid = target.processIdentifier {
+            keyDown.postToPid(pid)
+            keyUp.postToPid(pid)
+        } else {
+            keyDown.post(tap: .cgSessionEventTap)
+            keyUp.post(tap: .cgSessionEventTap)
+        }
+        try await Task.sleep(nanoseconds: 40_000_000)
         return TextInsertionReceipt(
             element: target.element,
             insertedText: text,

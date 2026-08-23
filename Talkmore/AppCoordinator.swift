@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OSLog
 
 @MainActor
 @Observable
@@ -9,6 +10,7 @@ final class AppCoordinator {
     private(set) var lastTranscript = ""
     private(set) var lastLatencySummary = ""
     private(set) var lastCompatibilitySummary = ""
+    private(set) var lastDiagnostic = "Starting…"
     private(set) var isHotkeyRunning = false
     var refinementEnabled: Bool {
         didSet { UserDefaults.standard.set(refinementEnabled, forKey: "refinementEnabled") }
@@ -29,6 +31,10 @@ final class AppCoordinator {
     private var target: TextTarget?
     private var shortcutHeld = false
     private var hasStarted = false
+    private let logger = Logger(subsystem: "com.mithul.talkmore", category: "Dictation")
+#if DEBUG
+    private var diagnosticSignalSources: [DispatchSourceSignal] = []
+#endif
 
     init() {
         refinementEnabled = UserDefaults.standard.object(forKey: "refinementEnabled") as? Bool ?? true
@@ -41,16 +47,23 @@ final class AppCoordinator {
 
         hotkey.onPress = { [weak self] in
             guard let self else { return }
+            self.trace("Fn press received")
             Task { await self.beginDictation() }
         }
         hotkey.onRelease = { [weak self] in
             guard let self else { return }
+            self.trace("Fn release received")
             Task { await self.endDictation() }
         }
         hotkey.start()
         isHotkeyRunning = true
         permissions.refresh()
+        trace("Ready · \(permissionSummary)")
         if refinementEnabled { refiner.prepare() }
+        Task { await AppleDictationService.prewarm() }
+#if DEBUG
+        installDiagnosticSignals()
+#endif
 
         // Local development builds are ad-hoc signed when no Development Team
         // is configured. macOS can drop Input Monitoring or Accessibility after
@@ -64,6 +77,7 @@ final class AppCoordinator {
     func requestPermissions() async {
         await permissions.requestAll()
         permissions.refresh()
+        trace("Permissions refreshed · \(permissionSummary)")
     }
 
     func retryAfterError() {
@@ -84,6 +98,7 @@ final class AppCoordinator {
         }
 
         state = .preparing
+        trace("Preparing microphone")
         liveTranscript = ""
         target = inserter.captureTarget()
         activeWritingContext = target.map {
@@ -102,6 +117,9 @@ final class AppCoordinator {
                 contextualStrings: activeWritingContext.speechHints,
                 onTranscript: { [weak self] transcript in
                     guard let self, self.activeSessionID == sessionID else { return }
+                    if self.liveTranscript.isEmpty, !transcript.isEmpty {
+                        self.trace("Speech recognized")
+                    }
                     self.liveTranscript = transcript
                 },
                 onAudioLevel: { [weak self] level in
@@ -111,6 +129,7 @@ final class AppCoordinator {
             )
 
             state = .recording
+            trace("Recording")
             overlay.update(state: state)
             if !shortcutHeld { await endDictation() }
         } catch {
@@ -131,6 +150,7 @@ final class AppCoordinator {
         let writingContext = activeWritingContext
 
         state = .finalizing
+        trace("Finalizing speech")
         overlay.update(state: state, audioLevel: 0)
         let releaseTime = CFAbsoluteTimeGetCurrent()
 
@@ -153,6 +173,7 @@ final class AppCoordinator {
                 state = .inserting
                 overlay.update(state: state, transcript: provisional)
                 let receipt = try await inserter.insert(provisional, into: insertionTarget)
+                trace("Text inserted · \(receipt.route.rawValue)")
                 let visibleTime = CFAbsoluteTimeGetCurrent() - releaseTime
                 lastTranscript = provisional
                 recordCompatibility(target: insertionTarget, receipt: receipt)
@@ -186,6 +207,7 @@ final class AppCoordinator {
             state = .inserting
             overlay.update(state: state, transcript: finalTranscript)
             let receipt = try await inserter.insert(finalTranscript, into: insertionTarget)
+            trace("Text inserted · \(receipt.route.rawValue)")
             let visibleTime = CFAbsoluteTimeGetCurrent() - releaseTime
             lastTranscript = finalTranscript
             recordCompatibility(target: insertionTarget, receipt: receipt)
@@ -302,6 +324,7 @@ final class AppCoordinator {
     }
 
     private func fail(_ message: String) {
+        trace("Error · \(message)", level: .error)
         state = .error(message)
         overlay.show(state: state, transcript: message)
         Task {
@@ -309,4 +332,42 @@ final class AppCoordinator {
             if case .error = state { retryAfterError() }
         }
     }
+
+    private var permissionSummary: String {
+        "mic \(permissions.microphoneGranted ? "yes" : "no"), "
+            + "speech \(permissions.speechGranted ? "yes" : "no"), "
+            + "accessibility \(permissions.accessibilityGranted ? "yes" : "no"), "
+            + "input \(permissions.inputMonitoringGranted ? "yes" : "no")"
+    }
+
+    private func trace(_ message: String, level: OSLogType = .info) {
+        lastDiagnostic = message
+        logger.log(level: level, "\(message, privacy: .public)")
+    }
+
+#if DEBUG
+    private func installDiagnosticSignals() {
+        guard diagnosticSignalSources.isEmpty else { return }
+        signal(SIGUSR1, SIG_IGN)
+        signal(SIGUSR2, SIG_IGN)
+
+        let press = DispatchSource.makeSignalSource(signal: SIGUSR1, queue: .main)
+        press.setEventHandler { [weak self] in
+            guard let self else { return }
+            self.trace("Diagnostic press received")
+            Task { await self.beginDictation() }
+        }
+
+        let release = DispatchSource.makeSignalSource(signal: SIGUSR2, queue: .main)
+        release.setEventHandler { [weak self] in
+            guard let self else { return }
+            self.trace("Diagnostic release received")
+            Task { await self.endDictation() }
+        }
+
+        press.resume()
+        release.resume()
+        diagnosticSignalSources = [press, release]
+    }
+#endif
 }

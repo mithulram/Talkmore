@@ -65,6 +65,43 @@ final class AppleDictationService {
     private var isRecording = false
     private var tapInstalled = false
 
+    static func prewarm(locale requestedLocale: Locale = .current) async {
+        do {
+            let preferredLocale = await DictationTranscriber.supportedLocale(
+                equivalentTo: requestedLocale
+            )
+            let fallbackLocale = await DictationTranscriber.supportedLocale(
+                equivalentTo: Locale(identifier: "en_US")
+            )
+            guard let locale = preferredLocale ?? fallbackLocale else { return }
+
+            let transcriber = DictationTranscriber(
+                locale: locale,
+                preset: .progressiveShortDictation
+            )
+            if let installation = try await AssetInventory.assetInstallationRequest(
+                supporting: [transcriber]
+            ) {
+                try await installation.downloadAndInstall()
+            }
+            _ = try? await AssetInventory.reserve(locale: locale)
+
+            let options = SpeechAnalyzer.Options(
+                priority: .utility,
+                modelRetention: .processLifetime
+            )
+            let analyzer = SpeechAnalyzer(modules: [transcriber], options: options)
+            guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(
+                compatibleWith: [transcriber]
+            ) else { return }
+            try await analyzer.prepareToAnalyze(in: format)
+            await analyzer.cancelAndFinishNow()
+        } catch {
+            // Prewarming is opportunistic. The normal start path still reports
+            // any actionable speech error when the user presses fn.
+        }
+    }
+
     func start(
         locale requestedLocale: Locale = .current,
         contextualStrings: [String] = [],

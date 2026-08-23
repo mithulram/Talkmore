@@ -78,6 +78,11 @@ struct MenuBarContent: View {
                 .buttonStyle(.borderedProminent)
             }
 
+            Text(coordinator.lastDiagnostic)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
             if !coordinator.lastTranscript.isEmpty {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Last dictation")
