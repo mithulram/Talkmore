@@ -1,6 +1,12 @@
 import Foundation
 import Observation
 import OSLog
+import AppKit
+
+private struct PreparedDictation {
+    let service: AppleDictationService
+    let localeIdentifier: String
+}
 
 @MainActor
 @Observable
@@ -21,6 +27,9 @@ final class AppCoordinator {
 
     let permissions = PermissionManager()
     let refiner = AppleTextRefiner()
+    let settings = ProductSettings()
+    let personalDictionary = PersonalDictionary()
+    let history = DictationHistory()
 
     private let hotkey = PushToTalkMonitor()
     private let inserter = TextInserter()
@@ -31,7 +40,7 @@ final class AppCoordinator {
     private var target: TextTarget?
     private var shortcutHeld = false
     private var hasStarted = false
-    private var preparedDictationTask: Task<AppleDictationService?, Never>?
+    private var preparedDictationTask: Task<PreparedDictation?, Never>?
     private let logger = Logger(subsystem: "com.mithul.talkmore", category: "Dictation")
 #if DEBUG
     private var diagnosticSignalSources: [DispatchSourceSignal] = []
@@ -87,6 +96,31 @@ final class AppCoordinator {
         overlay.hide()
     }
 
+    func copyLastTranscript() {
+        guard !lastTranscript.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(lastTranscript, forType: .string)
+        trace("Last dictation copied")
+    }
+
+    func copyToClipboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    func setDictationLanguage(_ language: DictationLanguage) {
+        guard settings.dictationLanguage != language else { return }
+        settings.dictationLanguage = language
+        let previousPreparation = preparedDictationTask
+        preparedDictationTask = nil
+        Task {
+            if let prepared = await previousPreparation?.value {
+                await prepared.service.cancel()
+            }
+            primeDictationService()
+        }
+    }
+
     private func beginDictation() async {
         shortcutHeld = true
         guard !state.isBusy else { return }
@@ -103,9 +137,15 @@ final class AppCoordinator {
         liveTranscript = ""
         target = inserter.captureTarget()
         activeWritingContext = target.map {
-            WritingContext(target: $0, developerModeEnabled: developerModeEnabled)
+            WritingContext(
+                target: $0,
+                developerModeEnabled: developerModeEnabled,
+                preferredStyle: settings.writingStyle
+            )
         } ?? .standard
-        overlay.show(state: state)
+        if settings.showOverlay {
+            overlay.show(state: state, placement: settings.overlayPlacement)
+        }
         if refinementEnabled { refiner.prepare() }
 
         let sessionID = UUID()
@@ -115,7 +155,8 @@ final class AppCoordinator {
 
         do {
             try await dictation.start(
-                contextualStrings: activeWritingContext.speechHints,
+                locale: settings.dictationLanguage.locale,
+                contextualStrings: activeWritingContext.speechHints + personalDictionary.speechHints,
                 onTranscript: { [weak self] transcript in
                     guard let self, self.activeSessionID == sessionID else { return }
                     if self.liveTranscript.isEmpty, !transcript.isEmpty {
@@ -168,7 +209,7 @@ final class AppCoordinator {
             // streaming result. Settle early after a trailing update, or use a
             // hard 330 ms deadline to preserve sub-0.5-second visible latency.
             let settledTranscript = await waitForTrailingTranscript(startingWith: transcriptAtRelease)
-            let provisional = writingContext.process(FastTextCleaner.clean(settledTranscript))
+            let provisional = processTranscript(settledTranscript, context: writingContext)
             activeSessionID = nil
             activeDictation = nil
 
@@ -179,7 +220,13 @@ final class AppCoordinator {
                 trace("Text inserted · \(receipt.route.rawValue)")
                 let visibleTime = CFAbsoluteTimeGetCurrent() - releaseTime
                 lastTranscript = provisional
-                recordCompatibility(target: insertionTarget, receipt: receipt)
+                recordSuccessfulInsertion(
+                    text: provisional,
+                    target: insertionTarget,
+                    receipt: receipt,
+                    visibleTime: visibleTime,
+                    writingContext: writingContext
+                )
                 lastLatencySummary = String(format: "Visible %.2fs · Polishing…", visibleTime)
                 finish()
 
@@ -200,8 +247,9 @@ final class AppCoordinator {
             // Very short utterances occasionally have no volatile result. In
             // that case wait only for final speech recognition, insert it, and
             // still keep generative cleanup off the blocking path.
-            let finalTranscript = writingContext.process(
-                FastTextCleaner.clean(try await finalizationTask.value)
+            let finalTranscript = processTranscript(
+                try await finalizationTask.value,
+                context: writingContext
             )
             guard !finalTranscript.isEmpty else {
                 finish()
@@ -213,7 +261,13 @@ final class AppCoordinator {
             trace("Text inserted · \(receipt.route.rawValue)")
             let visibleTime = CFAbsoluteTimeGetCurrent() - releaseTime
             lastTranscript = finalTranscript
-            recordCompatibility(target: insertionTarget, receipt: receipt)
+            recordSuccessfulInsertion(
+                text: finalTranscript,
+                target: insertionTarget,
+                receipt: receipt,
+                visibleTime: visibleTime,
+                writingContext: writingContext
+            )
             lastLatencySummary = String(format: "Visible %.2fs · Polishing…", visibleTime)
             finish()
 
@@ -245,8 +299,9 @@ final class AppCoordinator {
         visibleTime: CFTimeInterval
     ) async {
         do {
-            let finalTranscript = writingContext.process(
-                FastTextCleaner.clean(try await finalizationTask.value)
+            let finalTranscript = processTranscript(
+                try await finalizationTask.value,
+                context: writingContext
             )
             guard !finalTranscript.isEmpty else {
                 lastLatencySummary = String(format: "Visible %.2fs", visibleTime)
@@ -300,7 +355,7 @@ final class AppCoordinator {
         let refined = refinementEnabled
             ? await refiner.refine(transcript, context: writingContext)
             : transcript
-        let polished = writingContext.process(refined)
+        let polished = personalDictionary.apply(to: writingContext.process(refined))
         let applied = polished == provisional || inserter.replaceIfUnchanged(receipt, with: polished)
         if applied { lastTranscript = polished }
         let finalTime = CFAbsoluteTimeGetCurrent() - releaseTime
@@ -320,16 +375,46 @@ final class AppCoordinator {
         }
     }
 
+    private func processTranscript(_ transcript: String, context: WritingContext) -> String {
+        let prepared = context.preprocess(transcript)
+        let styled = context.process(prepared)
+        return personalDictionary.apply(to: styled)
+    }
+
+    private func recordSuccessfulInsertion(
+        text: String,
+        target: TextTarget,
+        receipt: TextInsertionReceipt,
+        visibleTime: TimeInterval,
+        writingContext: WritingContext
+    ) {
+        recordCompatibility(target: target, receipt: receipt)
+        guard settings.saveHistory else { return }
+        history.record(
+            text: text,
+            applicationName: target.applicationName,
+            writingStyle: writingContext.resolvedStyle,
+            route: receipt.route,
+            visibleLatency: visibleTime
+        )
+    }
+
     private func recordCompatibility(target: TextTarget, receipt: TextInsertionReceipt) {
         let appName = target.applicationName ?? target.bundleIdentifier ?? "Unknown app"
-        let mode = activeWritingContext.isDeveloperMode ? " · Developer mode" : ""
-        lastCompatibilitySummary = "\(appName) · \(receipt.route.rawValue)\(mode)"
+        let style = activeWritingContext.resolvedStyle.title
+        lastCompatibilitySummary = "\(appName) · \(receipt.route.rawValue) · \(style)"
     }
 
     private func fail(_ message: String) {
         trace("Error · \(message)", level: .error)
         state = .error(message)
-        overlay.show(state: state, transcript: message)
+        if settings.showOverlay {
+            overlay.show(
+                state: state,
+                transcript: message,
+                placement: settings.overlayPlacement
+            )
+        }
         Task {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             if case .error = state { retryAfterError() }
@@ -350,11 +435,13 @@ final class AppCoordinator {
 
     private func primeDictationService() {
         guard preparedDictationTask == nil else { return }
+        let locale = settings.dictationLanguage.locale
+        let localeIdentifier = locale.identifier
         preparedDictationTask = Task {
             let service = AppleDictationService()
             do {
-                try await service.prepare()
-                return service
+                try await service.prepare(locale: locale)
+                return PreparedDictation(service: service, localeIdentifier: localeIdentifier)
             } catch {
                 return nil
             }
@@ -363,9 +450,14 @@ final class AppCoordinator {
 
     private func nextDictationService() async -> AppleDictationService {
         guard let preparedDictationTask else { return AppleDictationService() }
-        let service = await preparedDictationTask.value
+        let prepared = await preparedDictationTask.value
         self.preparedDictationTask = nil
-        return service ?? AppleDictationService()
+        guard let prepared else { return AppleDictationService() }
+        guard prepared.localeIdentifier == settings.dictationLanguage.locale.identifier else {
+            await prepared.service.cancel()
+            return AppleDictationService()
+        }
+        return prepared.service
     }
 
 #if DEBUG

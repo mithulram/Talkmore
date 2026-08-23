@@ -15,12 +15,16 @@ final class OverlayController {
     let model = OverlayModel()
     private var panel: NSPanel?
 
-    func show(state: DictationState, transcript: String = "") {
+    func show(
+        state: DictationState,
+        transcript: String = "",
+        placement: OverlayPlacement = .bottom
+    ) {
         model.state = state
         model.transcript = transcript
 
         let panel = panel ?? makePanel()
-        position(panel)
+        position(panel, placement: placement)
         panel.orderFrontRegardless()
         self.panel = panel
     }
@@ -56,11 +60,15 @@ final class OverlayController {
         return panel
     }
 
-    private func position(_ panel: NSPanel) {
+    private func position(_ panel: NSPanel, placement: OverlayPlacement) {
         guard let screen = NSScreen.main else { return }
         let frame = screen.visibleFrame
         let x = frame.midX - panel.frame.width / 2
-        let y = frame.minY + 46
+        let y: CGFloat = switch placement {
+        case .bottom: frame.minY + 46
+        case .center: frame.midY - panel.frame.height / 2
+        case .top: frame.maxY - panel.frame.height - 46
+        }
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 }
@@ -70,14 +78,17 @@ struct RecordingOverlayView: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(model.state == .recording ? Color.red : Color.accentColor)
-                    .frame(width: 38, height: 38)
-                Image(systemName: model.state.symbol)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
+            Image("BrandIcon")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 42, height: 42)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(alignment: .bottomTrailing) {
+                    Circle()
+                        .fill(model.state == .recording ? Color.red : Color.indigo)
+                        .frame(width: 12, height: 12)
+                        .overlay(Circle().stroke(.white, lineWidth: 2))
+                }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(model.state.title)

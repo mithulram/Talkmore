@@ -228,6 +228,7 @@
 		A0000000000000000000000E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = NO;
@@ -237,7 +238,7 @@
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkmore needs microphone access to transcribe your speech locally.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Talkmore uses Apple's on-device speech recognition to turn your voice into text.";
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				OTHER_CODE_SIGN_FLAGS = "--requirements $(SRCROOT)/Config/DebugCodeSigningRequirements.req";
 				PRODUCT_BUNDLE_IDENTIFIER = com.mithul.talkmore;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -250,6 +251,7 @@
 		A0000000000000000000000F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = NO;
@@ -259,7 +261,7 @@
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkmore needs microphone access to transcribe your speech locally.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Talkmore uses Apple's on-device speech recognition to turn your voice into text.";
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mithul.talkmore;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

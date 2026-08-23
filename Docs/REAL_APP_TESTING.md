@@ -11,12 +11,14 @@ The menu-bar panel shows the route used for the most recent dictation.
 
 | App surface | Technology | Accessibility audit | Voice test |
 | --- | --- | --- | --- |
-| Codex composer | Native/web hybrid | Editable field available | Working during development |
+| Codex composer | Native/web hybrid | Editable field available | Paste route verified |
 | TextEdit document | AppKit rich text | Editable text area available | Manual regression required |
 | Apple Notes editor | AppKit rich text | Editable surface available | Manual regression required |
 | Safari address/search | AppKit field | Editable field available | Manual regression required |
-| Cursor composer/editor | Electron/Monaco | Editable composer available | Manual regression required |
+| Cursor composer/editor | Electron/Monaco | Paste route selected | Verified during development |
 | Terminal prompt | Terminal text surface | Automation restricted | Manual regression required |
+
+Cursor and Codex intentionally prefer the paste route because Electron and hybrid editors do not always expose a stable editable Accessibility value. The clipboard is restored after insertion whenever macOS allows it.
 
 ## Manual regression script
 
@@ -29,5 +31,7 @@ For each app:
 5. Wait for background polish without moving the cursor.
 6. Confirm the menu shows the application name, insertion route, visible latency, and final latency.
 7. Repeat while immediately typing after insertion; Talkmore must not overwrite the new typing.
+
+The development build also accepts `SIGUSR1` as an fn press and `SIGUSR2` as an fn release. This makes repeatable timing tests possible without changing the production hotkey behavior.
 
 Never press Return in chat composers, browser address fields, or Terminal during compatibility testing.

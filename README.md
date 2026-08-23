@@ -1,19 +1,21 @@
 # Talkmore
 
-Talkmore is a fast, local-first push-to-talk dictation utility for macOS. Hold the fn key, speak naturally, and release to insert polished text into the focused app.
-
-> Talkmore is currently an early alpha intended for local development and testing.
+Talkmore is a private, local-first push-to-talk dictation app for macOS. Hold the fn key, speak naturally, and release to insert clean text into the focused app. Version 0.2 is a usable local beta with a complete menu-bar experience, customization, and no account or cloud transcription.
 
 ## Features
 
 - Native SwiftUI menu-bar application
 - Hold **fn/Globe** to record
 - On-device dictation with Apple's `DictationTranscriber`
-- Instant streaming insertion followed by optional in-place Apple Intelligence polish
+- Sub-0.5-second release-to-insert target with a prewarmed recognition pipeline
+- Optional in-place Apple Intelligence polish after the first insertion
 - Accessibility insertion with a paste fallback
-- Non-activating floating recording overlay
-- Voice-responsive listening animation
-- App-aware developer mode for coding vocabulary, identifiers, filenames, and symbols
+- Non-activating, voice-responsive floating overlay with configurable placement
+- Automatic, Everyday, Concise, Email, Developer, and Verbatim writing styles
+- App-aware Email and Developer modes
+- Personal dictionary for names, products, acronyms, and exact spellings
+- Private local history with one-click copy and an option to disable saving
+- Original Talkmore app icon and polished menu/settings experience
 - No backend, analytics, accounts, or network transcription
 
 ## Requirements
@@ -35,7 +37,7 @@ If macOS also opens Emoji, Dictation, or switches input sources, change the Glob
 
 The first transcription may take longer while macOS downloads the language asset. Apple Intelligence must be enabled for automatic cleanup; raw on-device transcription still works when cleanup is unavailable.
 
-Talkmore inserts the latest streaming transcript immediately after the fn key is released. Final speech recognition and Apple Intelligence polish continue in the background. The polished result replaces the provisional text only when the cursor has not moved, so Talkmore never overwrites subsequent typing.
+Talkmore keeps transcription internal while you speak, waits briefly for the final trailing word when fn is released, and inserts the latest complete transcript. Optional Apple Intelligence polish continues in the background. The polished result replaces the provisional text only when the cursor has not moved, so Talkmore never overwrites subsequent typing.
 
 ## Architecture
 
@@ -52,3 +54,5 @@ xcodebuild -project Talkmore.xcodeproj -scheme Talkmore test
 See [the real-app compatibility checklist](Docs/REAL_APP_TESTING.md) for native, browser, Electron, and terminal testing.
 
 See [developer mode](Docs/DEVELOPER_MODE.md) for supported coding apps and voice formatting commands.
+
+See [the product guide](Docs/PRODUCT_GUIDE.md) for writing styles, dictionary, history, customization, and privacy behavior.

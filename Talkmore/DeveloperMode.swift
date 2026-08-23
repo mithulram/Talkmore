@@ -1,56 +1,122 @@
 import Foundation
 
 struct WritingContext: Equatable {
+    let resolvedStyle: WritingStyle
     let isDeveloperMode: Bool
+    let isEmailMode: Bool
     let applicationName: String?
 
-    init(applicationName: String?, bundleIdentifier: String?, developerModeEnabled: Bool) {
+    init(
+        applicationName: String?,
+        bundleIdentifier: String?,
+        developerModeEnabled: Bool,
+        preferredStyle: WritingStyle = .automatic
+    ) {
         self.applicationName = applicationName
-        isDeveloperMode = developerModeEnabled && Self.isCodingApp(
+        let codingApp = Self.isCodingApp(
             applicationName: applicationName,
             bundleIdentifier: bundleIdentifier
         )
+        let emailApp = Self.isEmailApp(
+            applicationName: applicationName,
+            bundleIdentifier: bundleIdentifier
+        )
+
+        switch preferredStyle {
+        case .automatic:
+            if developerModeEnabled, codingApp {
+                resolvedStyle = .developer
+            } else if emailApp {
+                resolvedStyle = .email
+            } else {
+                resolvedStyle = .everyday
+            }
+        case .developer where !developerModeEnabled:
+            resolvedStyle = .everyday
+        default:
+            resolvedStyle = preferredStyle
+        }
+        isDeveloperMode = resolvedStyle == .developer
+        isEmailMode = resolvedStyle == .email
     }
 
-    init(target: TextTarget, developerModeEnabled: Bool) {
+    init(
+        target: TextTarget,
+        developerModeEnabled: Bool,
+        preferredStyle: WritingStyle = .automatic
+    ) {
         self.init(
             applicationName: target.applicationName,
             bundleIdentifier: target.bundleIdentifier,
-            developerModeEnabled: developerModeEnabled
+            developerModeEnabled: developerModeEnabled,
+            preferredStyle: preferredStyle
         )
     }
 
     static let standard = WritingContext(
         applicationName: nil,
         bundleIdentifier: nil,
-        developerModeEnabled: false
+        developerModeEnabled: false,
+        preferredStyle: .everyday
     )
 
     var speechHints: [String] {
-        guard isDeveloperMode else { return [] }
-        return [
-            "Swift", "SwiftUI", "UIKit", "AppKit", "Xcode", "GitHub", "GitLab",
-            "JavaScript", "TypeScript", "Node.js", "Next.js", "React", "Python",
-            "OpenAI", "ChatGPT", "Codex", "README.md", "package.json", "tsconfig.json",
-            "camel case", "snake case", "Pascal case", "new line", "new paragraph",
-            "open parenthesis", "close parenthesis", "open bracket", "close bracket",
-            "open brace", "close brace", "underscore", "semicolon", "arrow"
-        ]
+        switch resolvedStyle {
+        case .developer:
+            [
+                "Swift", "SwiftUI", "UIKit", "AppKit", "Xcode", "GitHub", "GitLab",
+                "JavaScript", "TypeScript", "Node.js", "Next.js", "React", "Python",
+                "OpenAI", "ChatGPT", "Codex", "README.md", "package.json", "tsconfig.json",
+                "camel case", "snake case", "Pascal case", "new line", "new paragraph",
+                "open parenthesis", "close parenthesis", "open bracket", "close bracket",
+                "open brace", "close brace", "underscore", "semicolon", "arrow"
+            ]
+        case .email:
+            ["subject line", "new paragraph", "new line", "best regards", "kind regards"]
+        default:
+            []
+        }
     }
 
     var refinementInstructions: String {
-        guard isDeveloperMode else { return "This is normal prose dictation." }
         let app = applicationName.map { " in \($0)" } ?? ""
-        return """
-        This dictation is being inserted into a developer app\(app). Preserve code identifiers,
-        API names, filenames, URLs, symbols, line breaks, casing, and indentation exactly. Keep a
-        spoken request as prose unless the speaker explicitly dictates code or formatting.
-        """
+        switch resolvedStyle {
+        case .developer:
+            return """
+            This dictation is being inserted into a developer app\(app). Preserve code identifiers,
+            API names, filenames, URLs, symbols, line breaks, casing, and indentation exactly. Keep a
+            spoken request as prose unless the speaker explicitly dictates code or formatting.
+            """
+        case .email:
+            return """
+            Format this as a polished professional email\(app). Preserve the speaker's tone and facts.
+            Use natural short paragraphs, keep an explicitly spoken greeting and sign-off, and never
+            invent a subject, recipient, promise, or signature.
+            """
+        case .concise:
+            return "Make this concise and direct without removing facts, intent, or the speaker's tone."
+        case .verbatim:
+            return "Preserve the wording verbatim. Only repair obvious recognition punctuation."
+        case .automatic, .everyday:
+            return "This is normal prose dictation. Keep it natural and faithful to the speaker."
+        }
+    }
+
+    func preprocess(_ text: String) -> String {
+        resolvedStyle == .verbatim
+            ? text.trimmingCharacters(in: .whitespacesAndNewlines)
+            : FastTextCleaner.clean(text)
     }
 
     func process(_ text: String) -> String {
-        guard isDeveloperMode else { return text }
-        return DeveloperTextProcessor.process(text)
+        switch resolvedStyle {
+        case .developer:
+            DeveloperTextProcessor.process(text)
+        case .email:
+            EmailTextProcessor.process(text)
+        default:
+            text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
     }
 
     private static func isCodingApp(applicationName: String?, bundleIdentifier: String?) -> Bool {
@@ -76,6 +142,70 @@ struct WritingContext: Equatable {
             "cursor", "visual studio code", "xcode", "terminal", "iterm", "iterm2",
             "warp", "zed", "ghostty", "codex", "t3 code"
         ].contains(name)
+    }
+
+    private static func isEmailApp(applicationName: String?, bundleIdentifier: String?) -> Bool {
+        let bundle = bundleIdentifier?.lowercased() ?? ""
+        if [
+            "com.apple.mail",
+            "com.microsoft.outlook",
+            "com.readdle.smartemail-macos",
+            "com.mimestream.mimestream",
+            "io.canarymail.mac"
+        ].contains(bundle) {
+            return true
+        }
+
+        let name = applicationName?.lowercased() ?? ""
+        return ["mail", "microsoft outlook", "spark", "mimestream", "canary mail"].contains(name)
+    }
+}
+
+enum EmailTextProcessor {
+    static func process(_ input: String) -> String {
+        var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return text }
+
+        let commands: [(String, String)] = [
+            (#"(?i)\bnew\s+paragraph\b"#, "\n\n"),
+            (#"(?i)\bnew\s+line\b"#, "\n"),
+            (#"(?i)\bcomma\b"#, ","),
+            (#"(?i)\b(full\s+stop|period)\b"#, "."),
+            (#"(?i)\bquestion\s+mark\b"#, "?"),
+            (#"(?i)\bexclamation\s+mark\b"#, "!"),
+            (#"(?i)\bcolon\b"#, ":")
+        ]
+        for (pattern, replacement) in commands {
+            text = replace(pattern, in: text, with: replacement)
+        }
+        text = replace(#"(?i)^subject(?:\s+line)?\s*:?\s*"#, in: text, with: "Subject: ")
+        text = replace(#"[ \t]+\n"#, in: text, with: "\n")
+        text = replace(#"\n[ \t]+"#, in: text, with: "\n")
+        text = replace(#"\n{3,}"#, in: text, with: "\n\n")
+        text = replace(#"\s+([,.!?;:])"#, in: text, with: "$1")
+        text = replace(#"([,.!?;:])(?=\S)"#, in: text, with: "$1 ")
+
+        return text
+            .components(separatedBy: "\n")
+            .map(capitalizeLine)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func capitalizeLine(_ line: String) -> String {
+        guard let index = line.firstIndex(where: \.isLetter) else { return line }
+        var result = line
+        result.replaceSubrange(index...index, with: String(line[index]).uppercased())
+        return result
+    }
+
+    private static func replace(_ pattern: String, in text: String, with replacement: String) -> String {
+        guard let expression = try? NSRegularExpression(pattern: pattern) else { return text }
+        return expression.stringByReplacingMatches(
+            in: text,
+            range: NSRange(text.startIndex..., in: text),
+            withTemplate: replacement
+        )
     }
 }
 
