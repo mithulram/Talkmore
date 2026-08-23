@@ -10,6 +10,16 @@ final class TalkmoreAppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindowController: NSWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+#if DEBUG
+        // XCTest launches the application target as a host for unit tests. Do not
+        // start global input monitoring, permission prompts, or speech prewarming
+        // in that process; fresh CI runners can otherwise wait on macOS services.
+        let process = ProcessInfo.processInfo
+        let isUnitTestHost = process.environment["XCTestConfigurationFilePath"] != nil
+        let isMenuPreview = process.arguments.contains("--show-menu-for-testing")
+        if isUnitTestHost && !isMenuPreview { return }
+#endif
+
         configureStatusItem()
         configurePopover()
         coordinator.start()
