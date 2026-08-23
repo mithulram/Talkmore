@@ -20,6 +20,7 @@ Notable user-visible changes are recorded here. Talkmore follows semantic versio
 
 - Reduced warm release-to-insert latency toward a sub-0.5-second target.
 - Kept live transcript text out of the overlay; the interface shows voice energy only.
+- Routed paste fallback through the focused macOS session so website fields in multiprocess browsers—including Claude and YouTube in Dia—receive dictation just like native browser fields.
 
 ### Known limitations
 

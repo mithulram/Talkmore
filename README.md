@@ -16,7 +16,7 @@ Talkmore is a native SwiftUI menu-bar app inspired by the speed and simplicity o
 - On-device recognition through Apple `DictationTranscriber`.
 - Warm release-to-insert target below 0.5 seconds; the current local benchmark is approximately 0.40 seconds.
 - A bounded finalization window that preserves words spoken immediately before release.
-- Accessibility insertion with a safe clipboard/paste fallback.
+- Accessibility insertion with a session-focused paste fallback for native apps, website forms, search fields, and browser-based editors.
 - Automatic, Everyday, Concise, Email, Developer, and Verbatim writing styles.
 - App-aware Email and Developer behavior for Mail, Cursor, Xcode, Codex, and terminals.
 - Personal dictionary for names, acronyms, product terms, and exact spelling.
@@ -64,6 +64,8 @@ flowchart LR
 ```
 
 The speech pipeline is prepared ahead of use. While fn is held, recognition remains internal. On release, Talkmore waits only long enough for Apple Speech to deliver the trailing word, performs deterministic cleanup, and inserts. Optional language-model rewriting happens later and replaces the provisional text only when the cursor is still safe.
+
+Browsers use the paste route because JavaScript-controlled fields need a real input event. Talkmore targets the visible browser while delivering the paste shortcut to the focused macOS session, allowing multiprocess browsers such as Dia to route text into both their own address bar and website renderer fields.
 
 Read [Architecture](Docs/ARCHITECTURE.md) for the component map, latency budget, privacy boundary, and extension points.
 

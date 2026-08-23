@@ -65,11 +65,12 @@ Settings → General can enable on-device text polish. This is optional and neve
 - Re-enable Input Monitoring for the exact Talkmore build that Xcode launched.
 - Quit any other push-to-talk utility that captures fn.
 
-### Text is transcribed but not pasted in Cursor, Codex, or a terminal
+### Text is transcribed but not pasted in a website, Cursor, Codex, or a terminal
 
 - Enable Accessibility for Talkmore.
 - Keep the target editor focused through release.
 - Check whether a clipboard manager or secure-input field is blocking simulated paste.
+- Update to the latest `main` branch if a browser address bar works but fields inside websites do not. Current builds route paste across multiprocess browsers such as Dia.
 - Use the [real-app checklist](REAL_APP_TESTING.md) to capture a reproducible result.
 
 ### The first dictation is slow

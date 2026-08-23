@@ -2,6 +2,32 @@ import XCTest
 @testable import Talkmore
 
 final class TextInsertionPlannerTests: XCTestCase {
+    func testFrontmostApplicationWinsOverFocusedBrowserRenderer() {
+        XCTAssertEqual(
+            TextTargetPlanner.destinationProcessIdentifier(
+                frontmost: 120,
+                focusedElement: 987
+            ),
+            120
+        )
+    }
+
+    func testFocusedElementProcessIsFallbackWhenNoFrontmostApplicationExists() {
+        XCTAssertEqual(
+            TextTargetPlanner.destinationProcessIdentifier(
+                frontmost: nil,
+                focusedElement: 987
+            ),
+            987
+        )
+        XCTAssertNil(
+            TextTargetPlanner.destinationProcessIdentifier(
+                frontmost: nil,
+                focusedElement: 0
+            )
+        )
+    }
+
     func testDevelopmentAppsPreferPaste() {
         XCTAssertEqual(
             TextInsertionPolicy.preferredRoute(for: "com.todesktop.230313mzl4w4u92"),
@@ -44,6 +70,26 @@ final class TextInsertionPlannerTests: XCTestCase {
                 TextInsertionPolicy.preferredRoute(for: bundleIdentifier),
                 .pasteboard,
                 "Expected website fields in \(bundleIdentifier) to use paste"
+            )
+        }
+    }
+
+    func testBrowserHelperProcessesAlsoPreferPaste() {
+        let helperBundleIdentifiers = [
+            "com.apple.WebKit.WebContent",
+            "com.google.Chrome.helper.renderer",
+            "com.brave.Browser.helper.renderer",
+            "com.microsoft.edgemac.helper.renderer",
+            "org.mozilla.firefox.helper",
+            "org.chromium.Chromium.helper",
+            "company.thebrowser.browser.helper.renderer"
+        ]
+
+        for bundleIdentifier in helperBundleIdentifiers {
+            XCTAssertEqual(
+                TextInsertionPolicy.preferredRoute(for: bundleIdentifier),
+                .pasteboard,
+                "Expected browser helper \(bundleIdentifier) to use paste"
             )
         }
     }

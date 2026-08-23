@@ -36,12 +36,18 @@ final class TextInserter {
         )
 
         var element = result == .success ? (value as! AXUIElement?) : nil
-        var pid: pid_t = 0
-        if let element { AXUIElementGetPid(element, &pid) }
+        var focusedElementPID: pid_t = 0
+        if let element { AXUIElementGetPid(element, &focusedElementPID) }
 
-        let application = pid == 0
-            ? frontmostApplication
-            : NSRunningApplication(processIdentifier: pid)
+        // Browser controls can be owned by a renderer/helper process. The
+        // visible frontmost application is still the destination that owns
+        // keyboard routing and supplies the browser bundle identifier used by
+        // the insertion policy.
+        let destinationPID = TextTargetPlanner.destinationProcessIdentifier(
+            frontmost: frontmostApplication?.processIdentifier,
+            focusedElement: focusedElementPID
+        )
+        let application = destinationPID.flatMap(NSRunningApplication.init(processIdentifier:))
 
         // The system-wide focused element lookup can intermittently fail in
         // Electron apps and directly after a local rebuild. Ask the frontmost
@@ -97,7 +103,7 @@ final class TextInserter {
             try await Task.sleep(nanoseconds: 80_000_000)
         }
 
-        let source = CGEventSource(stateID: .hidSystemState)
+        let source = CGEventSource(stateID: .combinedSessionState)
         guard
             let keyDown = CGEvent(
                 keyboardEventSource: source,
@@ -115,13 +121,14 @@ final class TextInserter {
 
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
-        if let pid = target.processIdentifier {
-            keyDown.postToPid(pid)
-            keyUp.postToPid(pid)
-        } else {
-            keyDown.post(tap: .cgSessionEventTap)
-            keyUp.post(tap: .cgSessionEventTap)
-        }
+
+        // Send the shortcut through the logged-in session's focused control.
+        // Dia and other Chromium browsers keep their address bar in the main
+        // process but website fields in renderer processes, so posting to one
+        // PID only reaches some of their editable surfaces.
+        keyDown.post(tap: .cgSessionEventTap)
+        try await Task.sleep(nanoseconds: 10_000_000)
+        keyUp.post(tap: .cgSessionEventTap)
         try await Task.sleep(nanoseconds: 40_000_000)
         return TextInsertionReceipt(
             element: target.element,
@@ -180,6 +187,16 @@ final class TextInserter {
     }
 }
 
+enum TextTargetPlanner {
+    static func destinationProcessIdentifier(
+        frontmost: pid_t?,
+        focusedElement: pid_t
+    ) -> pid_t? {
+        if let frontmost, frontmost > 0 { return frontmost }
+        return focusedElement > 0 ? focusedElement : nil
+    }
+}
+
 enum TextInsertionPolicy {
     private static let pastePreferredBundleIdentifiers: Set<String> = [
         // Web fields often expose writable Accessibility attributes without
@@ -224,11 +241,25 @@ enum TextInsertionPolicy {
         "com.t3tools.t3code"
     ]
 
+    private static let pastePreferredBundleIdentifierPrefixes = [
+        "com.apple.webkit.",
+        "com.google.chrome.",
+        "com.brave.browser.",
+        "com.microsoft.edgemac.",
+        "org.mozilla.firefox.",
+        "org.chromium.chromium.",
+        "company.thebrowser."
+    ]
+
     static func preferredRoute(for bundleIdentifier: String?) -> TextInsertionRoute {
         guard let bundleIdentifier = bundleIdentifier?.lowercased() else {
             return .accessibility
         }
-        return pastePreferredBundleIdentifiers.contains(bundleIdentifier)
+        let prefersPaste = pastePreferredBundleIdentifiers.contains(bundleIdentifier)
+            || pastePreferredBundleIdentifierPrefixes.contains {
+                bundleIdentifier.hasPrefix($0)
+            }
+        return prefersPaste
             ? .pasteboard
             : .accessibility
     }

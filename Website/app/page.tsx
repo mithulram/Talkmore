@@ -8,7 +8,7 @@ const talkmoreIcon = `${assetBasePath}/talkmore-icon.png`;
 const features = [
   ['01', 'Hold fn. Say it. Done.', 'One key is the entire interface. Talkmore listens while fn is held, catches the final word, and inserts when you release.', 'featureViolet'],
   ['02', 'Your audio stays yours.', 'Apple Speech runs on your Mac. There is no Talkmore cloud, account, analytics pipeline, or audio upload.', 'featureCyan'],
-  ['03', 'Made for where you type.', 'Accessibility-first insertion with a safe paste fallback works across native apps, browsers, Electron editors, and terminals.', 'featurePeach'],
+  ['03', 'Made for where you type.', 'Accessibility-first insertion plus session-focused paste works across native apps, website forms, search fields, browser editors, and terminals.', 'featurePeach'],
 ];
 
 const modes = [
@@ -176,6 +176,7 @@ export default function Home() {
             <details><summary>Why do I build it with Xcode?</summary><p>The open beta is not Developer ID signed or notarized yet. Building from source is the honest, safe installation path until a one-click release is ready.</p></details>
             <details><summary>Does Apple Intelligence slow down dictation?</summary><p>No. The first text insertion never waits for rewriting. Optional on-device polish happens afterward and is applied only when it is safe.</p></details>
             <details><summary>Which permissions are required?</summary><p>Microphone and Speech Recognition power dictation. Accessibility inserts text. Input Monitoring lets Talkmore detect the fn key globally.</p></details>
+            <details><summary>Does it work in website fields and Dia?</summary><p>Yes. Browser fields use a session-focused paste path so multiprocess browsers such as Dia can route dictation into their address bar as well as website search boxes, forms, and chat composers.</p></details>
             <details><summary>Can I use it in Cursor, Codex, or a terminal?</summary><p>Yes. Developer mode is designed for coding apps and terminals, with safe paste fallback where direct accessibility insertion is unavailable.</p></details>
           </div>
         </div>

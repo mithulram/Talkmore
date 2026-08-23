@@ -16,10 +16,14 @@ The menu-bar panel shows the route used for the most recent dictation.
 | Apple Notes editor | AppKit rich text | Editable surface available | Manual regression required |
 | Safari address/search | AppKit field | Editable field available | Manual regression required |
 | YouTube search in Safari/Chrome | Web input | DOM input event required | Paste route selected |
+| Dia address/search | Browser UI field | Main browser process | Paste route selected |
+| Claude/YouTube fields in Dia | Chromium renderer | Session-focused paste required | Paste route selected |
 | Cursor composer/editor | Electron/Monaco | Paste route selected | Verified during development |
 | Terminal prompt | Terminal text surface | Automation restricted | Manual regression required |
 
 Browsers, Cursor, and Codex intentionally prefer the paste route. Website inputs can expose a writable Accessibility value without sending the DOM input event that JavaScript-controlled fields require, while Electron and hybrid editors do not always expose a stable editable Accessibility value.
+
+For multiprocess browsers, Talkmore records the visible frontmost browser as the destination even when the focused web control is exposed by a renderer/helper process. Paste shortcuts are sent through the logged-in session's focused control so native browser fields and webpage renderer fields receive the same input path.
 
 ## Manual regression script
 

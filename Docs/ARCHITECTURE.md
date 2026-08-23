@@ -56,7 +56,9 @@ Contributors should treat the lack of network transcription, accounts, and analy
 
 ## Insertion safety
 
-Direct Accessibility replacement is preferred when the focused control exposes a writable text value and selection range. Electron apps, browsers, terminals, and controls with incomplete Accessibility support can use a clipboard/paste fallback.
+Direct Accessibility replacement is preferred when the focused control exposes a writable text value and selection range. Electron apps, browsers, terminals, and controls with incomplete Accessibility support use a clipboard/paste fallback.
+
+Multiprocess browsers can expose native browser controls and website controls from different processes. Target capture therefore retains the visible frontmost application for activation and compatibility policy, while paste events enter the logged-in session at the focused-control level. This lets the browser route the shortcut to its active native field or renderer without Talkmore guessing which helper process owns the editor.
 
 Optional refinement never blindly replaces text. The insertion plan rejects replacement when the user has moved the cursor or typed after the provisional insertion.
 

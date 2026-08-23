@@ -48,6 +48,12 @@ Settings → General controls:
 
 The voice overlay visualizes microphone level only. It does not display a live transcript.
 
+## App and website compatibility
+
+Talkmore inserts directly through macOS Accessibility when a native control safely exposes its text selection. Browsers, Electron apps, terminals, and JavaScript-controlled website fields use the paste fallback so the destination receives the same input event as a normal paste.
+
+Multiprocess browsers such as Dia keep the address bar and website fields in different processes. Talkmore targets the visible browser and sends paste through the focused macOS session, covering browser UI fields as well as website search bars, chat composers, forms, and content-editable surfaces. Secure-input fields can intentionally reject simulated input.
+
 ## Speed and final words
 
 Talkmore prepares the Apple Speech pipeline before the first recording. While fn is held, the transcript remains internal. On release, Talkmore allows a short bounded window for Apple Speech to deliver the final trailing word and then inserts immediately. Optional rewriting never blocks the first insertion.
