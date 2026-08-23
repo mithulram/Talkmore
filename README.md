@@ -1,58 +1,108 @@
 # Talkmore
 
-Talkmore is a private, local-first push-to-talk dictation app for macOS. Hold the fn key, speak naturally, and release to insert clean text into the focused app. Version 0.2 is a usable local beta with a complete menu-bar experience, customization, and no account or cloud transcription.
+<p align="center"><img src="Brand/Talkmore-AppIcon-Source.png" width="128" alt="Talkmore app icon"></p>
+<h3 align="center">Your voice, already written.</h3>
+<p align="center">Fast, private, open-source push-to-talk dictation for Apple silicon Macs.<br>Hold <strong>fn</strong>, speak naturally, and release to insert clean text anywhere.</p>
+<p align="center"><a href="https://talkmore.sites.openai.com">Website</a> · <a href="Docs/INSTALLATION.md">Install</a> · <a href="Docs/PRODUCT_GUIDE.md">Product guide</a> · <a href="https://github.com/mithulram/Talkmore/issues/new/choose">Report a problem</a></p>
+<p align="center"><img alt="macOS 26+" src="https://img.shields.io/badge/macOS-26%2B-111111?logo=apple"> <img alt="Swift" src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white"> <img alt="On-device" src="https://img.shields.io/badge/speech-on--device-6b5cff"> <img alt="MIT License" src="https://img.shields.io/badge/license-MIT-4cc9a4"></p>
 
-## Features
+Talkmore is a native SwiftUI menu-bar app inspired by the speed and simplicity of modern voice tools. It uses Apple Speech locally, inserts into the focused app, and optionally uses Apple Intelligence to polish text _after_ the fast first insertion. There is no Talkmore account, backend, subscription, analytics SDK, or network transcription.
 
-- Native SwiftUI menu-bar application
-- Hold **fn/Globe** to record
-- On-device dictation with Apple's `DictationTranscriber`
-- Sub-0.5-second release-to-insert target with a prewarmed recognition pipeline
-- Optional in-place Apple Intelligence polish after the first insertion
-- Accessibility insertion with a paste fallback
-- Non-activating, voice-responsive floating overlay with configurable placement
-- Automatic, Everyday, Concise, Email, Developer, and Verbatim writing styles
-- App-aware Email and Developer modes
-- Personal dictionary for names, products, acronyms, and exact spellings
-- Private local history with one-click copy and an option to disable saving
-- Original Talkmore app icon and polished menu/settings experience
-- No backend, analytics, accounts, or network transcription
+> **Open beta:** Talkmore is useful today, but it is not yet Developer ID signed or notarized. The supported installation path is building from source with Xcode.
+
+## What works today
+
+- Hold **fn/Globe** anywhere to record; release to transcribe and insert.
+- On-device recognition through Apple `DictationTranscriber`.
+- Warm release-to-insert target below 0.5 seconds; the current local benchmark is approximately 0.40 seconds.
+- A bounded finalization window that preserves words spoken immediately before release.
+- Accessibility insertion with a safe clipboard/paste fallback.
+- Automatic, Everyday, Concise, Email, Developer, and Verbatim writing styles.
+- App-aware Email and Developer behavior for Mail, Cursor, Xcode, Codex, and terminals.
+- Personal dictionary for names, acronyms, product terms, and exact spelling.
+- Optional local history, one-click copy, and configurable voice overlay.
+- Optional on-device Apple Intelligence cleanup that never blocks initial insertion.
 
 ## Requirements
 
-- macOS 26 or newer
-- Apple silicon Mac
-- Microphone, Speech Recognition, Accessibility, and Input Monitoring permissions
-- Apple Intelligence enabled for optional background polishing
+| Requirement | Why |
+| --- | --- |
+| Apple silicon Mac | Talkmore currently targets Apple silicon and Apple’s current speech stack. |
+| macOS 26 or newer | Required by `DictationTranscriber` and the current deployment target. |
+| Xcode 26 or newer | Required to build the open beta from source. |
+| Microphone permission | Captures speech while fn is held. |
+| Speech Recognition permission | Runs Apple’s speech recognizer. |
+| Accessibility permission | Inserts text into the focused app. |
+| Input Monitoring permission | Detects the fn key globally. |
 
-## Run locally
+Apple Intelligence is optional. Raw transcription and deterministic cleanup work without it.
 
-1. Open `Talkmore.xcodeproj` in Xcode.
-2. Select the Talkmore target and choose a Development Team if Xcode requests one.
-3. Run the app.
-4. Open Talkmore from the menu bar and grant the requested permissions.
-5. Hold **fn/Globe**, speak, and release.
+## Install
 
-If macOS also opens Emoji, Dictation, or switches input sources, change the Globe/fn key action to **Do Nothing** in System Settings → Keyboard.
+```sh
+git clone https://github.com/mithulram/Talkmore.git
+cd Talkmore
+open Talkmore.xcodeproj
+```
 
-The first transcription may take longer while macOS downloads the language asset. Apple Intelligence must be enabled for automatic cleanup; raw on-device transcription still works when cleanup is unavailable.
+In Xcode, choose the **Talkmore** scheme and press **Run**. On first launch, open Talkmore from the menu bar and grant the four permissions above. Then hold **fn**, speak, and release.
 
-Talkmore keeps transcription internal while you speak, waits briefly for the final trailing word when fn is released, and inserts the latest complete transcript. Optional Apple Intelligence polish continues in the background. The polished result replaces the provisional text only when the cursor has not moved, so Talkmore never overwrites subsequent typing.
+If macOS opens Emoji, starts system Dictation, or changes input source when fn is pressed, set **System Settings → Keyboard → Press fn key to → Do Nothing**.
 
-## Architecture
+See the [complete installation and troubleshooting guide](Docs/INSTALLATION.md) before opening an issue.
 
-Talkmore is a native SwiftUI and AppKit application. It uses `AVAudioEngine` for microphone capture, Apple's `DictationTranscriber` for on-device speech recognition, the Foundation Models framework for optional cleanup, and macOS Accessibility APIs for safe cross-application text insertion.
+## How it stays fast
 
-## Testing
+```mermaid
+flowchart LR
+    A[Hold fn] --> B[AVAudioEngine]
+    B --> C[Apple Speech on device]
+    C --> D[Bounded final-word wait]
+    D --> E[Deterministic cleanup]
+    E --> F[Insert at cursor]
+    F -. optional, asynchronous .-> G[Apple Intelligence polish]
+```
 
-Run the automated regression suite from Xcode with **Product → Test**, or from the command line:
+The speech pipeline is prepared ahead of use. While fn is held, recognition remains internal. On release, Talkmore waits only long enough for Apple Speech to deliver the trailing word, performs deterministic cleanup, and inserts. Optional language-model rewriting happens later and replaces the provisional text only when the cursor is still safe.
+
+Read [Architecture](Docs/ARCHITECTURE.md) for the component map, latency budget, privacy boundary, and extension points.
+
+## Writing modes
+
+| Mode | Best for | What it changes |
+| --- | --- | --- |
+| Automatic | Daily use | Chooses Email, Developer, or Everyday from the focused app. |
+| Everyday | Notes and chat | Cleans filler words and punctuation while preserving meaning. |
+| Concise | Short replies | Optionally tightens wording after insertion. |
+| Email | Mail and long replies | Handles subject lines, paragraphs, greetings, and sign-offs. |
+| Developer | Editors and terminals | Preserves technical terms and converts spoken casing, symbols, and filenames. |
+| Verbatim | Exact wording | Keeps recognized wording with only outer whitespace removed. |
+
+The [product guide](Docs/PRODUCT_GUIDE.md) covers styles, dictionary, history, customization, and privacy behavior.
+
+## Test
 
 ```sh
 xcodebuild -project Talkmore.xcodeproj -scheme Talkmore test
 ```
 
-See [the real-app compatibility checklist](Docs/REAL_APP_TESTING.md) for native, browser, Electron, and terminal testing.
+The automated suite covers dictation state, cleanup, insertion planning, developer mode, dictionary, history, and product settings. For manual cross-app checks, use the [real-app compatibility checklist](Docs/REAL_APP_TESTING.md).
 
-See [developer mode](Docs/DEVELOPER_MODE.md) for supported coding apps and voice formatting commands.
+## Project status
 
-See [the product guide](Docs/PRODUCT_GUIDE.md) for writing styles, dictionary, history, customization, and privacy behavior.
+Talkmore is an open beta. The core local dictation loop is working; distribution and long-tail compatibility are still maturing.
+
+- **Now:** reliable local dictation, fast insertion, dictionary, history, writing modes, and menu-bar controls.
+- **Next:** Developer ID signing, notarized downloads, automatic updates, and launch at login.
+- **Exploring:** memory-adaptive local correction models that load only when requested.
+- **Later:** multilingual accuracy and latency benchmarks across common Mac apps.
+
+See the [open issues](https://github.com/mithulram/Talkmore/issues) for current work.
+
+## Contributing
+
+Bug reports, compatibility results, documentation fixes, and focused pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), follow the [Code of Conduct](CODE_OF_CONDUCT.md), and report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
+## License
+
+Talkmore is available under the [MIT License](LICENSE).

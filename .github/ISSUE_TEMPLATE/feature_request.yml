@@ -1,0 +1,33 @@
+name: Feature request
+description: Propose a focused improvement to Talkmore.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the workflow or limitation, not only the proposed button or setting.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed experience
+      description: Explain what should happen from the user’s point of view.
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Speed, memory, or privacy impact
+      description: Note any expected cost to latency, 8 GB Macs, permissions, or local-only behavior.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and the roadmap.
+          required: true
+        - label: This request does not require cloud transcription by default.
+          required: true

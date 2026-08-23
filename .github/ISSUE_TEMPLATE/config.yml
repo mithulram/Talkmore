@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Installation guide
+    url: https://github.com/mithulram/Talkmore/blob/main/Docs/INSTALLATION.md
+    about: Check setup and troubleshooting before opening an issue.
+  - name: Private security report
+    url: https://github.com/mithulram/Talkmore/security/advisories/new
+    about: Report security and privacy vulnerabilities privately.

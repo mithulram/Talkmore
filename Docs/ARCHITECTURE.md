@@ -1,0 +1,69 @@
+# Talkmore architecture
+
+Talkmore is a native menu-bar application with a deliberately short hot path. Speech recognition, cleanup, settings, history, and optional rewriting run locally on the Mac.
+
+## System map
+
+```mermaid
+flowchart TD
+    P[PushToTalkMonitor] --> A[AppCoordinator]
+    A --> O[OverlayController]
+    A --> D[AppleDictationService]
+    D --> S[Apple DictationTranscriber]
+    D --> C[FastTextCleaner]
+    C --> I[TextInserter]
+    I --> X[Focused macOS app]
+    I --> H[DictationHistory]
+    C --> R[AppleTextRefiner]
+    R -. safe asynchronous replacement .-> I
+    T[ProductSettings] --> A
+    W[PersonalDictionary] --> D
+    M[DeveloperMode] --> C
+```
+
+## Components
+
+| Component | Responsibility |
+| --- | --- |
+| `TalkmoreAppDelegate` | Owns the menu-bar lifecycle and application activation behavior. |
+| `AppCoordinator` | Coordinates key state, recording, finalization, cleanup, insertion, and product state. |
+| `PushToTalkMonitor` | Observes global fn/Globe press and release without requiring an active Talkmore window. |
+| `AppleDictationService` | Captures microphone audio and manages Apple’s on-device transcription session. |
+| `FastTextCleaner` | Applies bounded deterministic cleanup and writing-mode commands. |
+| `AppleTextRefiner` | Optionally asks the on-device Foundation Models framework to improve inserted wording. |
+| `TextInserter` | Plans direct Accessibility insertion or a clipboard/paste fallback and protects later edits. |
+| `OverlayController` | Displays a non-activating microphone-level animation without showing live transcript text. |
+| `PersonalDictionary` | Stores exact spelling replacements locally and supplies recognition hints. |
+| `DictationHistory` | Stores successful dictations locally when history is enabled. |
+| `ProductSettings` | Stores language, writing style, overlay, history, and refinement preferences. |
+
+## Latency path
+
+1. The speech pipeline is prepared before the first recording where possible.
+2. Audio streams into Apple Speech while fn is held.
+3. On release, Talkmore requests finalization and waits inside a short bounded trailing-word window.
+4. Deterministic cleanup and dictionary replacement run synchronously.
+5. Text is inserted using the safest available route.
+6. Optional Apple Intelligence refinement runs afterward and applies only if the cursor state is still compatible.
+
+The visible latency measurement begins at fn release and ends after insertion completes. The target for a warm pipeline is below 0.5 seconds. First-use model preparation is outside the steady-state target.
+
+## Privacy boundary
+
+Talkmore does not implement a network client or backend. Its data paths are microphone audio to Apple’s on-device Speech framework, text through in-process cleanup, optional text through Apple’s on-device Foundation Models framework, local app storage, and final text to the focused application.
+
+Contributors should treat the lack of network transcription, accounts, and analytics as a product invariant. A proposal that adds network access must be explicit, opt-in, narrowly scoped, and discussed before implementation.
+
+## Insertion safety
+
+Direct Accessibility replacement is preferred when the focused control exposes a writable text value and selection range. Electron apps, browsers, terminals, and controls with incomplete Accessibility support can use a clipboard/paste fallback.
+
+Optional refinement never blindly replaces text. The insertion plan rejects replacement when the user has moved the cursor or typed after the provisional insertion.
+
+## Extending Talkmore
+
+- Add deterministic speech commands in `FastTextCleaner` with focused regression tests.
+- Add editor/app detection in `DeveloperMode` and verify it against `REAL_APP_TESTING.md`.
+- Add a writing style through settings, cleanup behavior, UI, and tests together.
+- Keep new work off the release-to-insert path unless the latency cost is measured and justified.
+- Do not add a network dependency to the core dictation loop.

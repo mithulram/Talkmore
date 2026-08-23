@@ -1,0 +1,72 @@
+name: Bug report
+description: Report a reproducible problem with dictation, insertion, permissions, or the interface.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping improve Talkmore. Remove private text before submitting.
+  - type: input
+    id: environment
+    attributes:
+      label: Mac and macOS
+      description: Example — M1 MacBook Air, 8 GB, macOS 26.0
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: Target app and version
+      description: Example — Cursor 1.7, Codex, TextEdit, Mail, Safari
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Problem area
+      options:
+        - fn key is not detected
+        - recording or transcription
+        - missing final words
+        - text insertion or paste
+        - slow insertion
+        - menu bar or settings
+        - dictionary, history, or writing style
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Tell us exactly what you did, what happened, and what you expected.
+    validations:
+      required: true
+  - type: input
+    id: language
+    attributes:
+      label: Language and writing style
+      placeholder: English (US), Automatic
+  - type: input
+    id: latency
+    attributes:
+      label: Visible release-to-insert latency
+      placeholder: 0.42 s
+  - type: checkboxes
+    id: permissions
+    attributes:
+      label: Permission check
+      options:
+        - label: Microphone is enabled
+        - label: Speech Recognition is enabled
+        - label: Accessibility is enabled
+        - label: Input Monitoring is enabled
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I tested the latest main branch.
+          required: true
+        - label: I removed private dictation content and searched existing issues.
+          required: true

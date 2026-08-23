@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  mac-app:
+    name: macOS tests
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v6
+      - name: Test Talkmore
+        run: xcodebuild -project Talkmore.xcodeproj -scheme Talkmore -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test
+
+  website:
+    name: Website build
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: Website
+    steps:
+      - uses: actions/checkout@v6
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: Website/pnpm-lock.yaml
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm run build
