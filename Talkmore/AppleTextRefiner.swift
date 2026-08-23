@@ -31,7 +31,7 @@ final class AppleTextRefiner {
         if !session.isResponding { session.prewarm() }
     }
 
-    func refine(_ transcript: String) async -> String {
+    func refine(_ transcript: String, context: WritingContext = .standard) async -> String {
         let cleaned = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard model.isAvailable, cleaned.split(whereSeparator: \.isWhitespace).count > 2 else {
             return cleaned
@@ -42,7 +42,7 @@ final class AppleTextRefiner {
         guard !session.isResponding else { return cleaned }
 
         do {
-            let response = try await session.respond(to: standalonePrompt(for: cleaned))
+            let response = try await session.respond(to: standalonePrompt(for: cleaned, context: context))
             return response.content.trimmingCharacters(in: .whitespacesAndNewlines)
         } catch LanguageModelSession.GenerationError.exceededContextWindowSize {
             // A session is intentionally reused for speed. Start a clean one only
@@ -51,7 +51,9 @@ final class AppleTextRefiner {
             self.session = replacement
             replacement.prewarm()
             do {
-                let response = try await replacement.respond(to: standalonePrompt(for: cleaned))
+                let response = try await replacement.respond(
+                    to: standalonePrompt(for: cleaned, context: context)
+                )
                 return response.content.trimmingCharacters(in: .whitespacesAndNewlines)
             } catch {
                 return cleaned
@@ -75,9 +77,10 @@ final class AppleTextRefiner {
         )
     }
 
-    private func standalonePrompt(for transcript: String) -> String {
+    private func standalonePrompt(for transcript: String, context: WritingContext) -> String {
         """
         Clean up only the standalone dictation between the markers.
+        Context: \(context.refinementInstructions)
         <dictation>
         \(transcript)
         </dictation>

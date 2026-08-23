@@ -13,6 +13,9 @@ final class AppCoordinator {
     var refinementEnabled: Bool {
         didSet { UserDefaults.standard.set(refinementEnabled, forKey: "refinementEnabled") }
     }
+    var developerModeEnabled: Bool {
+        didSet { UserDefaults.standard.set(developerModeEnabled, forKey: "developerModeEnabled") }
+    }
 
     let permissions = PermissionManager()
     let refiner = AppleTextRefiner()
@@ -22,12 +25,14 @@ final class AppCoordinator {
     private let overlay = OverlayController()
     private var activeDictation: AppleDictationService?
     private var activeSessionID: UUID?
+    private var activeWritingContext = WritingContext.standard
     private var target: TextTarget?
     private var shortcutHeld = false
     private var hasStarted = false
 
     init() {
         refinementEnabled = UserDefaults.standard.object(forKey: "refinementEnabled") as? Bool ?? true
+        developerModeEnabled = UserDefaults.standard.object(forKey: "developerModeEnabled") as? Bool ?? true
     }
 
     func start() {
@@ -73,6 +78,9 @@ final class AppCoordinator {
         state = .preparing
         liveTranscript = ""
         target = inserter.captureTarget()
+        activeWritingContext = target.map {
+            WritingContext(target: $0, developerModeEnabled: developerModeEnabled)
+        } ?? .standard
         overlay.show(state: state)
         if refinementEnabled { refiner.prepare() }
 
@@ -83,6 +91,7 @@ final class AppCoordinator {
 
         do {
             try await dictation.start(
+                contextualStrings: activeWritingContext.speechHints,
                 onTranscript: { [weak self] transcript in
                     guard let self, self.activeSessionID == sessionID else { return }
                     self.liveTranscript = transcript
@@ -111,6 +120,7 @@ final class AppCoordinator {
             let dictation = activeDictation,
             let insertionTarget = target
         else { return }
+        let writingContext = activeWritingContext
 
         state = .finalizing
         overlay.update(state: state, audioLevel: 0)
@@ -127,7 +137,7 @@ final class AppCoordinator {
             // streaming result. Settle early after a trailing update, or use a
             // hard 330 ms deadline to preserve sub-0.5-second visible latency.
             let settledTranscript = await waitForTrailingTranscript(startingWith: transcriptAtRelease)
-            let provisional = FastTextCleaner.clean(settledTranscript)
+            let provisional = writingContext.process(FastTextCleaner.clean(settledTranscript))
             activeSessionID = nil
             activeDictation = nil
 
@@ -147,6 +157,7 @@ final class AppCoordinator {
                         finalizationTask: finalizationTask,
                         receipt: receipt,
                         provisional: provisional,
+                        writingContext: writingContext,
                         releaseTime: releaseTime,
                         visibleTime: visibleTime
                     )
@@ -157,7 +168,9 @@ final class AppCoordinator {
             // Very short utterances occasionally have no volatile result. In
             // that case wait only for final speech recognition, insert it, and
             // still keep generative cleanup off the blocking path.
-            let finalTranscript = FastTextCleaner.clean(try await finalizationTask.value)
+            let finalTranscript = writingContext.process(
+                FastTextCleaner.clean(try await finalizationTask.value)
+            )
             guard !finalTranscript.isEmpty else {
                 finish()
                 return
@@ -176,6 +189,7 @@ final class AppCoordinator {
                     finalTranscript,
                     receipt: receipt,
                     provisional: finalTranscript,
+                    writingContext: writingContext,
                     releaseTime: releaseTime,
                     visibleTime: visibleTime
                 )
@@ -193,11 +207,14 @@ final class AppCoordinator {
         finalizationTask: Task<String, Error>,
         receipt: TextInsertionReceipt,
         provisional: String,
+        writingContext: WritingContext,
         releaseTime: CFAbsoluteTime,
         visibleTime: CFTimeInterval
     ) async {
         do {
-            let finalTranscript = FastTextCleaner.clean(try await finalizationTask.value)
+            let finalTranscript = writingContext.process(
+                FastTextCleaner.clean(try await finalizationTask.value)
+            )
             guard !finalTranscript.isEmpty else {
                 lastLatencySummary = String(format: "Visible %.2fs", visibleTime)
                 return
@@ -206,6 +223,7 @@ final class AppCoordinator {
                 finalTranscript,
                 receipt: receipt,
                 provisional: provisional,
+                writingContext: writingContext,
                 releaseTime: releaseTime,
                 visibleTime: visibleTime
             )
@@ -242,10 +260,14 @@ final class AppCoordinator {
         _ transcript: String,
         receipt: TextInsertionReceipt,
         provisional: String,
+        writingContext: WritingContext,
         releaseTime: CFAbsoluteTime,
         visibleTime: CFTimeInterval
     ) async {
-        let polished = refinementEnabled ? await refiner.refine(transcript) : transcript
+        let refined = refinementEnabled
+            ? await refiner.refine(transcript, context: writingContext)
+            : transcript
+        let polished = writingContext.process(refined)
         let applied = polished == provisional || inserter.replaceIfUnchanged(receipt, with: polished)
         if applied { lastTranscript = polished }
         let finalTime = CFAbsoluteTimeGetCurrent() - releaseTime
@@ -258,6 +280,7 @@ final class AppCoordinator {
         state = .idle
         liveTranscript = ""
         target = nil
+        activeWritingContext = .standard
         Task {
             try? await Task.sleep(nanoseconds: 100_000_000)
             if state == .idle { overlay.hide() }
@@ -266,7 +289,8 @@ final class AppCoordinator {
 
     private func recordCompatibility(target: TextTarget, receipt: TextInsertionReceipt) {
         let appName = target.applicationName ?? target.bundleIdentifier ?? "Unknown app"
-        lastCompatibilitySummary = "\(appName) · \(receipt.route.rawValue)"
+        let mode = activeWritingContext.isDeveloperMode ? " · Developer mode" : ""
+        lastCompatibilitySummary = "\(appName) · \(receipt.route.rawValue)\(mode)"
     }
 
     private func fail(_ message: String) {

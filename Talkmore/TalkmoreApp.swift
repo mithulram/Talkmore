@@ -56,6 +56,11 @@ struct MenuBarContent: View {
                 set: { coordinator.refinementEnabled = $0 }
             ))
 
+            Toggle("Developer mode in coding apps", isOn: Binding(
+                get: { coordinator.developerModeEnabled },
+                set: { coordinator.developerModeEnabled = $0 }
+            ))
+
             if !coordinator.permissions.allRequiredPermissionsGranted {
                 Button("Grant required permissions") {
                     Task { await coordinator.requestPermissions() }
@@ -122,10 +127,16 @@ struct SettingsView: View {
             }
 
             GroupBox("Local intelligence") {
-                HStack {
-                    Image(systemName: "apple.intelligence")
-                    Text(coordinator.refiner.availabilityDescription)
-                    Spacer()
+                VStack(spacing: 10) {
+                    HStack {
+                        Image(systemName: "apple.intelligence")
+                        Text(coordinator.refiner.availabilityDescription)
+                        Spacer()
+                    }
+                    Toggle("Developer mode in coding apps", isOn: Binding(
+                        get: { coordinator.developerModeEnabled },
+                        set: { coordinator.developerModeEnabled = $0 }
+                    ))
                 }
                 .padding(.vertical, 5)
             }

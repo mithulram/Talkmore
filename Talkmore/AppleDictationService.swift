@@ -67,6 +67,7 @@ final class AppleDictationService {
 
     func start(
         locale requestedLocale: Locale = .current,
+        contextualStrings: [String] = [],
         onTranscript: @escaping TranscriptHandler,
         onAudioLevel: @escaping AudioLevelHandler
     ) async throws {
@@ -86,6 +87,11 @@ final class AppleDictationService {
 
         let options = SpeechAnalyzer.Options(priority: .userInitiated, modelRetention: .processLifetime)
         let analyzer = SpeechAnalyzer(modules: [transcriber], options: options)
+        if !contextualStrings.isEmpty {
+            let context = AnalysisContext()
+            context.contextualStrings[.general] = contextualStrings
+            try await analyzer.setContext(context)
+        }
         guard let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else {
             throw DictationServiceError.missingAudioFormat
         }

@@ -13,6 +13,7 @@ Talkmore is a fast, local-first push-to-talk dictation utility for macOS. Hold t
 - Accessibility insertion with a paste fallback
 - Non-activating floating recording overlay
 - Voice-responsive listening animation
+- App-aware developer mode for coding vocabulary, identifiers, filenames, and symbols
 - No backend, analytics, accounts, or network transcription
 
 ## Requirements
@@ -49,3 +50,5 @@ xcodebuild -project Talkmore.xcodeproj -scheme Talkmore test
 ```
 
 See [the real-app compatibility checklist](Docs/REAL_APP_TESTING.md) for native, browser, Electron, and terminal testing.
+
+See [developer mode](Docs/DEVELOPER_MODE.md) for supported coding apps and voice formatting commands.
