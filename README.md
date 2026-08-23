@@ -3,7 +3,7 @@
 <p align="center"><img src="Brand/Talkmore-AppIcon-Source.png" width="128" alt="Talkmore app icon"></p>
 <h3 align="center">Your voice, already written.</h3>
 <p align="center">Fast, private, open-source push-to-talk dictation for Apple silicon Macs.<br>Hold <strong>fn</strong>, speak naturally, and release to insert clean text anywhere.</p>
-<p align="center"><a href="https://talkmore.sites.openai.com">Website</a> · <a href="Docs/INSTALLATION.md">Install</a> · <a href="Docs/PRODUCT_GUIDE.md">Product guide</a> · <a href="https://github.com/mithulram/Talkmore/issues/new/choose">Report a problem</a></p>
+<p align="center"><a href="https://talkmore.prasad-6.chatgpt.site">Website</a> · <a href="Docs/INSTALLATION.md">Install</a> · <a href="Docs/PRODUCT_GUIDE.md">Product guide</a> · <a href="https://github.com/mithulram/Talkmore/issues/new/choose">Report a problem</a></p>
 <p align="center"><img alt="macOS 26+" src="https://img.shields.io/badge/macOS-26%2B-111111?logo=apple"> <img alt="Swift" src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white"> <img alt="On-device" src="https://img.shields.io/badge/speech-on--device-6b5cff"> <img alt="MIT License" src="https://img.shields.io/badge/license-MIT-4cc9a4"></p>
 
 Talkmore is a native SwiftUI menu-bar app inspired by the speed and simplicity of modern voice tools. It uses Apple Speech locally, inserts into the focused app, and optionally uses Apple Intelligence to polish text _after_ the fast first insertion. There is no Talkmore account, backend, subscription, analytics SDK, or network transcription.
