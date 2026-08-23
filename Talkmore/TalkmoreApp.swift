@@ -3,25 +3,11 @@ import SwiftUI
 
 @main
 struct TalkmoreApp: App {
-    @State private var coordinator: AppCoordinator
-
-    init() {
-        let coordinator = AppCoordinator()
-        _coordinator = State(initialValue: coordinator)
-        coordinator.start()
-    }
+    @NSApplicationDelegateAdaptor(TalkmoreAppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        MenuBarExtra {
-            MenuBarContent(coordinator: coordinator)
-        } label: {
-            Image(systemName: coordinator.state.symbol)
-                .accessibilityLabel("Talkmore")
-        }
-        .menuBarExtraStyle(.window)
-
         Settings {
-            SettingsView(coordinator: coordinator)
+            SettingsView(coordinator: appDelegate.coordinator)
                 .frame(width: 760, height: 590)
         }
     }
@@ -29,6 +15,8 @@ struct TalkmoreApp: App {
 
 struct MenuBarContent: View {
     let coordinator: AppCoordinator
+    let openSettings: () -> Void
+    let quitApplication: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -72,32 +60,28 @@ struct MenuBarContent: View {
             .padding(11)
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
 
-            Menu {
-                ForEach(WritingStyle.allCases) { style in
-                    Button {
-                        coordinator.settings.writingStyle = style
-                    } label: {
-                        if coordinator.settings.writingStyle == style {
-                            Label(style.title, systemImage: "checkmark")
-                        } else {
-                            Text(style.title)
-                        }
+            HStack(spacing: 10) {
+                Image(systemName: coordinator.settings.writingStyle.symbol)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18)
+                Text("Writing style")
+                    .font(.callout.weight(.medium))
+                Spacer()
+                Picker("Writing style", selection: Binding(
+                    get: { coordinator.settings.writingStyle },
+                    set: { coordinator.settings.writingStyle = $0 }
+                )) {
+                    ForEach(WritingStyle.allCases) { style in
+                        Text(style.title).tag(style)
                     }
                 }
-            } label: {
-                HStack {
-                    Label(
-                        coordinator.settings.writingStyle.title,
-                        systemImage: coordinator.settings.writingStyle.symbol
-                    )
-                    Spacer()
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .contentShape(Rectangle())
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 132)
             }
-            .menuStyle(.borderlessButton)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
 
             if !coordinator.permissions.allRequiredPermissionsGranted {
                 VStack(alignment: .leading, spacing: 8) {
@@ -155,13 +139,14 @@ struct MenuBarContent: View {
             Divider()
 
             HStack {
-                SettingsLink {
+                Button(action: openSettings) {
                     Label("Settings", systemImage: "gearshape")
                 }
+                .buttonStyle(.bordered)
                 Spacer()
-                Button("Quit") { NSApplication.shared.terminate(nil) }
+                Button("Quit", action: quitApplication)
+                    .buttonStyle(.bordered)
             }
-            .buttonStyle(.plain)
         }
         .padding(16)
         .frame(width: 350)
