@@ -77,6 +77,11 @@ struct MenuBarContent: View {
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.tertiary)
                     }
+                    if !coordinator.lastCompatibilitySummary.isEmpty {
+                        Text(coordinator.lastCompatibilitySummary)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
                 }
             }
 

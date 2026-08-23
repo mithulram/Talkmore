@@ -8,6 +8,7 @@ final class AppCoordinator {
     private(set) var liveTranscript = ""
     private(set) var lastTranscript = ""
     private(set) var lastLatencySummary = ""
+    private(set) var lastCompatibilitySummary = ""
     private(set) var isHotkeyRunning = false
     var refinementEnabled: Bool {
         didSet { UserDefaults.standard.set(refinementEnabled, forKey: "refinementEnabled") }
@@ -136,6 +137,7 @@ final class AppCoordinator {
                 let receipt = try await inserter.insert(provisional, into: insertionTarget)
                 let visibleTime = CFAbsoluteTimeGetCurrent() - releaseTime
                 lastTranscript = provisional
+                recordCompatibility(target: insertionTarget, receipt: receipt)
                 lastLatencySummary = String(format: "Visible %.2fs · Polishing…", visibleTime)
                 finish()
 
@@ -165,6 +167,7 @@ final class AppCoordinator {
             let receipt = try await inserter.insert(finalTranscript, into: insertionTarget)
             let visibleTime = CFAbsoluteTimeGetCurrent() - releaseTime
             lastTranscript = finalTranscript
+            recordCompatibility(target: insertionTarget, receipt: receipt)
             lastLatencySummary = String(format: "Visible %.2fs · Polishing…", visibleTime)
             finish()
 
@@ -259,6 +262,11 @@ final class AppCoordinator {
             try? await Task.sleep(nanoseconds: 100_000_000)
             if state == .idle { overlay.hide() }
         }
+    }
+
+    private func recordCompatibility(target: TextTarget, receipt: TextInsertionReceipt) {
+        let appName = target.applicationName ?? target.bundleIdentifier ?? "Unknown app"
+        lastCompatibilitySummary = "\(appName) · \(receipt.route.rawValue)"
     }
 
     private func fail(_ message: String) {

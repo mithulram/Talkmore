@@ -5,6 +5,13 @@ import CoreGraphics
 struct TextTarget {
     let element: AXUIElement?
     let processIdentifier: pid_t?
+    let applicationName: String?
+    let bundleIdentifier: String?
+}
+
+enum TextInsertionRoute: String {
+    case accessibility = "Accessibility"
+    case pasteboard = "Paste fallback"
 }
 
 struct TextInsertionReceipt {
@@ -12,6 +19,7 @@ struct TextInsertionReceipt {
     let insertedText: String
     let caretLocation: CFIndex?
     let canReplace: Bool
+    let route: TextInsertionRoute
 }
 
 @MainActor
@@ -29,9 +37,15 @@ final class TextInserter {
         var pid: pid_t = 0
         if let element { AXUIElementGetPid(element, &pid) }
 
+        let application = pid == 0
+            ? NSWorkspace.shared.frontmostApplication
+            : NSRunningApplication(processIdentifier: pid)
+
         return TextTarget(
             element: element,
-            processIdentifier: pid == 0 ? NSWorkspace.shared.frontmostApplication?.processIdentifier : pid
+            processIdentifier: application?.processIdentifier,
+            applicationName: application?.localizedName,
+            bundleIdentifier: application?.bundleIdentifier
         )
     }
 
@@ -47,7 +61,8 @@ final class TextInserter {
                     element: element,
                     insertedText: text,
                     caretLocation: selectedRange(of: element)?.location,
-                    canReplace: true
+                    canReplace: true,
+                    route: .accessibility
                 )
             }
         }
@@ -78,7 +93,8 @@ final class TextInserter {
             element: target.element,
             insertedText: text,
             caretLocation: nil,
-            canReplace: false
+            canReplace: false,
+            route: .pasteboard
         )
     }
 
@@ -96,10 +112,10 @@ final class TextInserter {
         let insertedLength = (receipt.insertedText as NSString).length
         guard expectedCaret >= insertedLength else { return false }
 
-        var replacementRange = CFRange(
-            location: expectedCaret - insertedLength,
-            length: insertedLength
-        )
+        guard var replacementRange = TextInsertionPlanner.replacementRange(
+            insertedUTF16Length: insertedLength,
+            caretLocation: expectedCaret
+        ) else { return false }
         guard let rangeValue = AXValueCreate(.cfRange, &replacementRange) else { return false }
         guard AXUIElementSetAttributeValue(
             element,
@@ -127,6 +143,16 @@ final class TextInserter {
         var range = CFRange()
         guard AXValueGetValue(axValue, .cfRange, &range) else { return nil }
         return range
+    }
+}
+
+enum TextInsertionPlanner {
+    static func replacementRange(insertedUTF16Length: Int, caretLocation: CFIndex) -> CFRange? {
+        guard insertedUTF16Length >= 0, caretLocation >= insertedUTF16Length else { return nil }
+        return CFRange(
+            location: caretLocation - insertedUTF16Length,
+            length: insertedUTF16Length
+        )
     }
 }
 

@@ -39,3 +39,13 @@ Talkmore inserts the latest streaming transcript immediately after the fn key is
 ## Architecture
 
 Talkmore is a native SwiftUI and AppKit application. It uses `AVAudioEngine` for microphone capture, Apple's `DictationTranscriber` for on-device speech recognition, the Foundation Models framework for optional cleanup, and macOS Accessibility APIs for safe cross-application text insertion.
+
+## Testing
+
+Run the automated regression suite from Xcode with **Product → Test**, or from the command line:
+
+```sh
+xcodebuild -project Talkmore.xcodeproj -scheme Talkmore test
+```
+
+See [the real-app compatibility checklist](Docs/REAL_APP_TESTING.md) for native, browser, Electron, and terminal testing.
