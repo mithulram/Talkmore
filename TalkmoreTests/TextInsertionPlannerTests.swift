@@ -2,6 +2,33 @@ import XCTest
 @testable import Talkmore
 
 final class TextInsertionPlannerTests: XCTestCase {
+    func testDevelopmentAppsPreferPaste() {
+        XCTAssertEqual(
+            TextInsertionPolicy.preferredRoute(for: "com.todesktop.230313mzl4w4u92"),
+            .pasteboard
+        )
+        XCTAssertEqual(
+            TextInsertionPolicy.preferredRoute(for: "com.openai.codex"),
+            .pasteboard
+        )
+        XCTAssertEqual(
+            TextInsertionPolicy.preferredRoute(for: "com.microsoft.VSCode"),
+            .pasteboard
+        )
+        XCTAssertEqual(
+            TextInsertionPolicy.preferredRoute(for: "com.apple.dt.Xcode"),
+            .pasteboard
+        )
+    }
+
+    func testNativeEditorsPreferAccessibility() {
+        XCTAssertEqual(
+            TextInsertionPolicy.preferredRoute(for: "com.apple.TextEdit"),
+            .accessibility
+        )
+        XCTAssertEqual(TextInsertionPolicy.preferredRoute(for: nil), .accessibility)
+    }
+
     func testReplacementRangeEndsAtCaret() {
         let range = TextInsertionPlanner.replacementRange(
             insertedUTF16Length: 12,

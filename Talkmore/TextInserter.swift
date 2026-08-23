@@ -10,7 +10,7 @@ struct TextTarget {
     let bundleIdentifier: String?
 }
 
-enum TextInsertionRoute: String {
+enum TextInsertionRoute: String, Equatable {
     case accessibility = "Accessibility"
     case pasteboard = "Paste fallback"
 }
@@ -67,7 +67,8 @@ final class TextInserter {
     }
 
     func insert(_ text: String, into target: TextTarget) async throws -> TextInsertionReceipt {
-        if let element = target.element {
+        if TextInsertionPolicy.preferredRoute(for: target.bundleIdentifier) == .accessibility,
+           let element = target.element {
             let result = AXUIElementSetAttributeValue(
                 element,
                 kAXSelectedTextAttribute as CFString,
@@ -176,6 +177,32 @@ final class TextInserter {
         var range = CFRange()
         guard AXValueGetValue(axValue, .cfRange, &range) else { return nil }
         return range
+    }
+}
+
+enum TextInsertionPolicy {
+    private static let pastePreferredBundleIdentifiers: Set<String> = [
+        "com.todesktop.230313mzl4w4u92", // Cursor
+        "com.openai.codex",
+        "com.microsoft.vscode",
+        "com.microsoft.vscodeinsiders",
+        "com.apple.dt.xcode",
+        "com.apple.terminal",
+        "com.googlecode.iterm2",
+        "dev.warp.warp",
+        "dev.warp.warp-stable",
+        "dev.zed.zed",
+        "com.mitchellh.ghostty",
+        "com.t3tools.t3code"
+    ]
+
+    static func preferredRoute(for bundleIdentifier: String?) -> TextInsertionRoute {
+        guard let bundleIdentifier = bundleIdentifier?.lowercased() else {
+            return .accessibility
+        }
+        return pastePreferredBundleIdentifiers.contains(bundleIdentifier)
+            ? .pasteboard
+            : .accessibility
     }
 }
 
