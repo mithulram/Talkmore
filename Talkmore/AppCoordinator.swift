@@ -51,6 +51,14 @@ final class AppCoordinator {
         isHotkeyRunning = true
         permissions.refresh()
         if refinementEnabled { refiner.prepare() }
+
+        // Local development builds are ad-hoc signed when no Development Team
+        // is configured. macOS can drop Input Monitoring or Accessibility after
+        // a rebuild, so recover the permission flow instead of silently leaving
+        // the fn hotkey inactive.
+        if !permissions.allRequiredPermissionsGranted {
+            Task { await requestPermissions() }
+        }
     }
 
     func requestPermissions() async {

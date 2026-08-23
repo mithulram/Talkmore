@@ -90,7 +90,10 @@ final class AppleDictationService {
         if !contextualStrings.isEmpty {
             let context = AnalysisContext()
             context.contextualStrings[.general] = contextualStrings
-            try await analyzer.setContext(context)
+            // Vocabulary is an accuracy enhancement, never a prerequisite for
+            // transcription. Some OS builds can reject context updates while
+            // speech assets are changing, so keep the base recognizer running.
+            try? await analyzer.setContext(context)
         }
         guard let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else {
             throw DictationServiceError.missingAudioFormat

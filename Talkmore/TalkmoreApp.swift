@@ -3,12 +3,17 @@ import SwiftUI
 
 @main
 struct TalkmoreApp: App {
-    @State private var coordinator = AppCoordinator()
+    @State private var coordinator: AppCoordinator
+
+    init() {
+        let coordinator = AppCoordinator()
+        _coordinator = State(initialValue: coordinator)
+        coordinator.start()
+    }
 
     var body: some Scene {
         MenuBarExtra {
             MenuBarContent(coordinator: coordinator)
-                .task { coordinator.start() }
         } label: {
             Image(systemName: coordinator.state.symbol)
                 .accessibilityLabel("Talkmore")
@@ -62,6 +67,11 @@ struct MenuBarContent: View {
             ))
 
             if !coordinator.permissions.allRequiredPermissionsGranted {
+                if !coordinator.permissions.inputMonitoringGranted {
+                    Label("Fn key access needed", systemImage: "keyboard.badge.exclamationmark")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
                 Button("Grant required permissions") {
                     Task { await coordinator.requestPermissions() }
                 }
