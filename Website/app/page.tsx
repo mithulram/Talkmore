@@ -2,6 +2,8 @@ import Image from 'next/image';
 
 const githubUrl = 'https://github.com/mithulram/Talkmore';
 const issuesUrl = `${githubUrl}/issues/new/choose`;
+const assetBasePath = process.env.GITHUB_PAGES === 'true' ? '/Talkmore' : '';
+const talkmoreIcon = `${assetBasePath}/talkmore-icon.png`;
 
 const features = [
   ['01', 'Hold fn. Say it. Done.', 'One key is the entire interface. Talkmore listens while fn is held, catches the final word, and inserts when you release.', 'featureViolet'],
@@ -30,7 +32,7 @@ export default function Home() {
     <main>
       <nav className="nav shell" aria-label="Primary navigation">
         <a className="brand" href="#top" aria-label="Talkmore home">
-          <Image src="/talkmore-icon.png" alt="" width={38} height={38} priority />
+          <Image src={talkmoreIcon} alt="" width={38} height={38} priority />
           <span>Talkmore</span>
         </a>
         <div className="navLinks">
@@ -57,7 +59,7 @@ export default function Home() {
           <div className="glow" />
           <div className="menuMockup">
             <div className="mockHeader">
-              <Image src="/talkmore-icon.png" alt="Talkmore icon" width={48} height={48} />
+              <Image src={talkmoreIcon} alt="Talkmore icon" width={48} height={48} />
               <div><strong>Talkmore</strong><small><i /> Ready</small></div>
               <b>LOCAL</b>
             </div>
@@ -180,14 +182,14 @@ export default function Home() {
       </section>
 
       <section className="finalCta shell">
-        <Image src="/talkmore-icon.png" alt="Talkmore icon" width={74} height={74} />
+        <Image src={talkmoreIcon} alt="Talkmore icon" width={74} height={74} />
         <p className="kicker">Open source by default</p>
         <h2>Your next thought<br /><em>doesn&apos;t need the cloud.</em></h2>
         <div className="actions"><a className="button primary" href="#install">Build Talkmore</a><a className="button secondary" href={githubUrl}>Explore the source <span>↗</span></a></div>
       </section>
 
       <footer className="siteFooter shell">
-        <a className="brand" href="#top"><Image src="/talkmore-icon.png" alt="" width={30} height={30} /><span>Talkmore</span></a>
+        <a className="brand" href="#top"><Image src={talkmoreIcon} alt="" width={30} height={30} /><span>Talkmore</span></a>
         <p>Local push-to-talk dictation for Mac.</p>
         <div><a href={`${githubUrl}/blob/main/LICENSE`}>MIT License</a><a href={`${githubUrl}/blob/main/SECURITY.md`}>Security</a><a href={githubUrl}>GitHub</a></div>
       </footer>
