@@ -98,11 +98,11 @@ final class ProductFeaturesTests: XCTestCase {
     func testCorrectionDetectorExtractsEditedNameInsideDictation() {
         XCTAssertEqual(
             CorrectionCandidateDetector.candidate(
-                before: "Message Fluid Voice today",
-                after: "Message FluidVoice today",
+                before: "Message River Stone today",
+                after: "Message Riverstone today",
                 insertedRange: NSRange(location: 0, length: 25)
             ),
-            LearnedCorrectionCandidate(heardText: "Fluid Voice", correctedText: "FluidVoice")
+            LearnedCorrectionCandidate(heardText: "River Stone", correctedText: "Riverstone")
         )
     }
 

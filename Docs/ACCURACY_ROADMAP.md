@@ -8,7 +8,7 @@ The preferred Apple-silicon engine is FluidAudio's Parakeet Unified English 0.6B
 
 Talkmore downloads only the files required by that tier—approximately 610 MB—and runs them locally through Core ML. Apple Speech prepares in parallel and is selected automatically while the download is incomplete, if model loading fails, or on a supported non-Apple-silicon Mac. Users do not choose a model.
 
-FluidAudio is Apache-2.0 and is integrated as a pinned package dependency. The downloaded model is CC-BY-4.0. FluidVoice was reviewed for product ideas only: because its application source is GPLv3 and Talkmore is MIT, no FluidVoice application code was copied or adapted.
+FluidAudio is Apache-2.0 and is integrated as a pinned package dependency. The downloaded model is CC-BY-4.0.
 
 ## Implemented accuracy layers
 
@@ -44,4 +44,3 @@ An accuracy change is ready only when it:
 - [FluidAudio repository and integration documentation](https://github.com/FluidInference/FluidAudio)
 - [FluidAudio ASR benchmarks](https://github.com/FluidInference/FluidAudio/blob/main/Documentation/Benchmarks.md)
 - [Parakeet Unified English Core ML model card](https://huggingface.co/FluidInference/parakeet-unified-en-0.6b-coreml)
-- [FluidVoice project reviewed for product behavior](https://github.com/altic-dev/FluidVoice)
