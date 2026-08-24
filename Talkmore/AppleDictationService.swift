@@ -33,6 +33,90 @@ private final class AudioLevelSampler: @unchecked Sendable {
     }
 }
 
+final class BufferedStreamGate<Element: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private let continuation: AsyncStream<Element>.Continuation
+    private var bufferedElements: [Element] = []
+    private var isOpen = false
+    private var isFinished = false
+
+    init(continuation: AsyncStream<Element>.Continuation) {
+        self.continuation = continuation
+    }
+
+    func yield(_ element: Element) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isFinished else {
+            return
+        }
+        if isOpen {
+            continuation.yield(element)
+        } else {
+            bufferedElements.append(element)
+        }
+    }
+
+    func open() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isOpen, !isFinished else { return }
+        isOpen = true
+        for element in bufferedElements {
+            continuation.yield(element)
+        }
+        bufferedElements.removeAll(keepingCapacity: false)
+    }
+
+    func finish() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isFinished else {
+            return
+        }
+        isFinished = true
+        isOpen = true
+        for element in bufferedElements {
+            continuation.yield(element)
+        }
+        bufferedElements.removeAll(keepingCapacity: false)
+        continuation.finish()
+    }
+}
+
+enum SpeechContextPlanner {
+    static func normalized(_ strings: [String]) -> [String] {
+        var seen: Set<String> = []
+        return strings.compactMap { value in
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+            let key = trimmed.folding(
+                options: [.caseInsensitive, .diacriticInsensitive],
+                locale: .current
+            )
+            guard seen.insert(key).inserted else { return nil }
+            return trimmed
+        }
+    }
+}
+
+enum DictationTranscriptPlanner {
+    static func bestAvailable(completed: String?, live: String) -> String {
+        let completed = completed?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return completed.isEmpty ? live : completed
+    }
+}
+
+enum DictationSettlePlanner {
+    static func shouldFinishEarly(
+        hasFinalResultAfterCapture: Bool,
+        stableTicks: Int,
+        elapsed: TimeInterval
+    ) -> Bool {
+        hasFinalResultAfterCapture && stableTicks >= 2 && elapsed >= 0.15
+    }
+}
+
 enum DictationServiceError: LocalizedError {
     case unsupportedLocale
     case missingAudioFormat
@@ -50,22 +134,48 @@ enum DictationServiceError: LocalizedError {
 }
 
 @MainActor
-final class AppleDictationService {
-    typealias TranscriptHandler = @MainActor (String) -> Void
-    typealias AudioLevelHandler = @MainActor (Float) -> Void
+protocol DictationService: AnyObject {
+    typealias TranscriptHandler = @MainActor @Sendable (String) -> Void
+    typealias AudioLevelHandler = @MainActor @Sendable (Float) -> Void
+
+    var completedTranscript: String? { get }
+    var hasFinalResultAfterCapture: Bool { get }
+    var engineName: String { get }
+
+    func prepare(locale: Locale) async throws
+    func start(
+        locale: Locale,
+        contextualStrings: [String],
+        onTranscript: @escaping TranscriptHandler,
+        onAudioLevel: @escaping AudioLevelHandler
+    ) async throws
+    func stopCapturing() throws
+    func finalizeTranscription() async throws -> String
+    func cancel() async
+}
+
+@MainActor
+final class AppleDictationService: DictationService {
+    typealias TranscriptHandler = DictationService.TranscriptHandler
+    typealias AudioLevelHandler = DictationService.AudioLevelHandler
 
     private let audioEngine = AVAudioEngine()
     private var analyzer: SpeechAnalyzer?
     private var transcriber: DictationTranscriber?
-    private var inputContinuation: AsyncStream<AnalyzerInput>.Continuation?
+    private var inputGate: BufferedStreamGate<AnalyzerInput>?
     private var resultTask: Task<Void, Error>?
     private var converter: AVAudioConverter?
     private var preparedFormat: AVAudioFormat?
     private var audioLevelHandler: AudioLevelHandler?
     private var finalizedText = ""
     private var volatileText = ""
+    private(set) var completedTranscript: String?
+    private(set) var hasFinalResultAfterCapture = false
     private var isRecording = false
+    private var isFinalizing = false
     private var tapInstalled = false
+
+    let engineName = "Apple Speech English fallback"
 
     func prepare(locale requestedLocale: Locale = .current) async throws {
         guard analyzer == nil else { return }
@@ -90,15 +200,16 @@ final class AppleDictationService {
         try await analyzer.prepareToAnalyze(in: analyzerFormat)
 
         let (stream, continuation) = AsyncStream.makeStream(of: AnalyzerInput.self)
+        let inputGate = BufferedStreamGate(continuation: continuation)
         try await analyzer.start(inputSequence: stream)
 
         self.analyzer = analyzer
         self.transcriber = transcriber
-        inputContinuation = continuation
+        self.inputGate = inputGate
         preparedFormat = analyzerFormat
         try configureAudioEngine(
             analyzerFormat: analyzerFormat,
-            continuation: continuation
+            inputGate: inputGate
         )
     }
 
@@ -114,17 +225,13 @@ final class AppleDictationService {
         guard let analyzer, let transcriber, preparedFormat != nil else {
             throw DictationServiceError.missingAudioFormat
         }
-        if !contextualStrings.isEmpty {
-            let context = AnalysisContext()
-            context.contextualStrings[.general] = contextualStrings
-            // Vocabulary is an accuracy enhancement, never a prerequisite for
-            // transcription. Some OS builds can reject context updates while
-            // speech assets are changing, so keep the base recognizer running.
-            Task { try? await analyzer.setContext(context) }
-        }
+        let contextualStrings = SpeechContextPlanner.normalized(contextualStrings)
 
         self.finalizedText = ""
         self.volatileText = ""
+        completedTranscript = nil
+        hasFinalResultAfterCapture = false
+        isFinalizing = false
 
         resultTask = Task { [weak self] in
             for try await result in transcriber.results {
@@ -137,6 +244,20 @@ final class AppleDictationService {
         audioLevelHandler = onAudioLevel
         try audioEngine.start()
         isRecording = true
+
+        // Capture begins immediately, while the gate holds only the first few
+        // converted buffers. Opening it after the context update ensures names
+        // and technical vocabulary affect the first word without losing audio
+        // or adding work to the release-to-insert path.
+        defer { inputGate?.open() }
+        if !contextualStrings.isEmpty {
+            let context = AnalysisContext()
+            context.contextualStrings[.general] = contextualStrings
+            // Vocabulary is an accuracy enhancement, never a prerequisite for
+            // transcription. Some OS builds can reject context updates while
+            // speech assets are changing, so keep the base recognizer running.
+            try? await analyzer.setContext(context)
+        }
     }
 
     func stop() async throws -> String {
@@ -147,14 +268,15 @@ final class AppleDictationService {
     func stopCapturing() throws {
         guard isRecording else { throw DictationServiceError.notRecording }
         isRecording = false
+        isFinalizing = true
 
         if tapInstalled {
             audioEngine.inputNode.removeTap(onBus: 0)
             tapInstalled = false
         }
         audioEngine.stop()
-        inputContinuation?.finish()
-        inputContinuation = nil
+        inputGate?.finish()
+        inputGate = nil
     }
 
     func finalizeTranscription() async throws -> String {
@@ -163,6 +285,8 @@ final class AppleDictationService {
         try await resultTask?.value
 
         let text = combinedTranscript
+        completedTranscript = text
+        isFinalizing = false
         resultTask = nil
         self.analyzer = nil
         transcriber = nil
@@ -174,13 +298,14 @@ final class AppleDictationService {
 
     func cancel() async {
         isRecording = false
+        isFinalizing = false
         if tapInstalled {
             audioEngine.inputNode.removeTap(onBus: 0)
             tapInstalled = false
         }
         audioEngine.stop()
-        inputContinuation?.finish()
-        inputContinuation = nil
+        inputGate?.finish()
+        inputGate = nil
         await analyzer?.cancelAndFinishNow()
         resultTask?.cancel()
         resultTask = nil
@@ -189,6 +314,8 @@ final class AppleDictationService {
         converter = nil
         preparedFormat = nil
         audioLevelHandler = nil
+        completedTranscript = nil
+        hasFinalResultAfterCapture = false
     }
 
     private var combinedTranscript: String {
@@ -200,6 +327,7 @@ final class AppleDictationService {
 
     private func accept(text: String, isFinal: Bool, handler: TranscriptHandler) {
         if isFinal {
+            if isFinalizing { hasFinalResultAfterCapture = true }
             if !text.isEmpty {
                 finalizedText = [finalizedText, text].filter { !$0.isEmpty }.joined(separator: " ")
             }
@@ -212,7 +340,7 @@ final class AppleDictationService {
 
     private func configureAudioEngine(
         analyzerFormat: AVAudioFormat,
-        continuation: AsyncStream<AnalyzerInput>.Continuation
+        inputGate: BufferedStreamGate<AnalyzerInput>
     ) throws {
         let inputNode = audioEngine.inputNode
         let microphoneFormat = inputNode.outputFormat(forBus: 0)
@@ -227,7 +355,7 @@ final class AppleDictationService {
         inputNode.installTap(onBus: 0, bufferSize: 1_024, format: microphoneFormat) { buffer, _ in
             levelSampler.consume(buffer)
             guard let converted = Self.convert(buffer, using: converter, to: analyzerFormat) else { return }
-            continuation.yield(AnalyzerInput(buffer: converted))
+            inputGate.yield(AnalyzerInput(buffer: converted))
         }
         tapInstalled = true
 

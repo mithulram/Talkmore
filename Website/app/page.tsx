@@ -7,7 +7,7 @@ const talkmoreIcon = `${assetBasePath}/talkmore-icon.png`;
 
 const features = [
   ['01', 'Hold fn. Say it. Done.', 'One key is the entire interface. Talkmore listens while fn is held, catches the final word, and inserts when you release.', 'featureViolet'],
-  ['02', 'Your audio stays yours.', 'Apple Speech runs on your Mac. There is no Talkmore cloud, account, analytics pipeline, or audio upload.', 'featureCyan'],
+  ['02', 'English, automatically optimized.', 'On Apple silicon, a low-latency Parakeet model runs locally with Apple Speech ready as the automatic fallback. No model picker required.', 'featureCyan'],
   ['03', 'Made for where you type.', 'Accessibility-first insertion plus session-focused paste works across native apps, website forms, search fields, browser editors, and terminals.', 'featurePeach'],
 ];
 
@@ -21,10 +21,10 @@ const modes = [
 ];
 
 const roadmap = [
-  ['Shipping now', 'Fast local dictation', 'On-device recognition, six writing styles, dictionary, history, and safe cross-app insertion.'],
+  ['Shipping now', 'Accurate English dictation', 'Parakeet Unified, Apple fallback, learned dictionary corrections, conversational lists, and safe cross-app insertion.'],
   ['Next', 'A signed Mac download', 'Developer ID signing, notarization, automatic updates, and a one-click installer.'],
-  ['Exploring', 'Smarter local corrections', 'Memory-aware language models that load only when needed, without slowing first insertion.'],
-  ['Later', 'Languages + benchmarks', 'A public compatibility and latency suite across accents, languages, and popular Mac apps.'],
+  ['Exploring', 'Measured accuracy', 'A Talkmore-owned English speech suite reporting word error rate and p50/p95 insertion latency across Macs.'],
+  ['Later', 'More languages', 'Multilingual recognition after the English experience is proven.'],
 ];
 
 export default function Home() {
@@ -47,12 +47,12 @@ export default function Home() {
         <div className="heroCopy">
           <p className="eyebrow"><span /> Private. Local. Fast.</p>
           <h1>Your voice,<br /><em>already written.</em></h1>
-          <p className="lede">Hold fn, speak naturally, and release. Talkmore turns your voice into clean text in the app beneath your cursor—without an account, a server, or cloud audio.</p>
+          <p className="lede">Hold fn, speak naturally in English, and release. Talkmore turns your voice into clean, structured text in the app beneath your cursor—without an account, a server, or cloud audio.</p>
           <div className="actions">
             <a className="button primary" href="#install">Build for your Mac</a>
             <a className="button secondary" href={githubUrl}>Steal the code, legally <span>↗</span></a>
           </div>
-          <p className="fineprint">Free and open source · Apple silicon · macOS 26+</p>
+          <p className="fineprint">Free and open source · English-first · macOS 26+</p>
         </div>
 
         <div className="productStage" aria-label="Talkmore menu bar app preview">
@@ -128,7 +128,7 @@ export default function Home() {
         <div className="privacyCopy">
           <p className="kicker">Private by architecture</p>
           <h2>No cloud to trust.<br />No data to leak.</h2>
-          <p>Microphone capture, Apple Speech recognition, cleanup, dictionary replacements, and history all stay on your Mac. The source is open so the privacy promise is inspectable.</p>
+          <p>Microphone capture, Parakeet or Apple Speech recognition, cleanup, dictionary replacements, and history all stay on your Mac. Only the high-accuracy model files are downloaded; your audio and transcripts are never uploaded.</p>
           <ul>
             <li><span>✓</span> No backend or network transcription</li>
             <li><span>✓</span> No account, tracking, or analytics SDK</li>
@@ -143,13 +143,13 @@ export default function Home() {
             <p className="kicker">Install the open beta</p>
             <h2>Four minutes.<br />One local build.</h2>
             <p>Talkmore is currently distributed from source while signed and notarized releases are being prepared. You always know exactly what is running on your Mac.</p>
-            <div className="requirements"><span>macOS 26+</span><span>Apple silicon</span><span>Xcode 26+</span></div>
+            <div className="requirements"><span>macOS 26+</span><span>Apple silicon recommended</span><span>Xcode 26+</span></div>
             <a className="button primary" href={`${githubUrl}/blob/main/Docs/INSTALLATION.md`}>Open the full install guide</a>
           </div>
           <div className="terminalCard">
             <header><i /><i /><i /><span>Terminal — zsh</span></header>
             <pre><code><span className="comment"># 1. Get Talkmore</span>{'\n'}git clone https://github.com/mithulram/Talkmore.git{'\n'}cd Talkmore{'\n\n'}<span className="comment"># 2. Open the native Mac project</span>{'\n'}open Talkmore.xcodeproj</code></pre>
-            <footer><span>3. Press Run in Xcode</span><span>4. Grant the four macOS permissions</span></footer>
+            <footer><span>3. Press Run in Xcode</span><span>4. Follow the macOS permission setup</span></footer>
           </div>
         </div>
       </section>
@@ -172,10 +172,12 @@ export default function Home() {
         <div className="shell faqGrid">
           <div><p className="kicker">Good questions</p><h2>Before you<br />hold fn.</h2></div>
           <div className="faqs">
-            <details open><summary>Is Talkmore really local?</summary><p>Yes. Audio is transcribed with Apple&apos;s on-device Speech framework. Talkmore has no server, account system, analytics, or network transcription service.</p></details>
+            <details open><summary>Is Talkmore really local?</summary><p>Yes. Audio is transcribed locally with Parakeet Unified or Apple Speech. The app downloads model weights during first preparation, but it never uploads audio or transcripts and has no account, analytics, or transcription server.</p></details>
+            <details><summary>Which language and model should I choose?</summary><p>None. Talkmore is English-only for now and automatically uses the high-accuracy 320 ms Parakeet path when ready, with Apple Speech as the transparent fallback.</p></details>
+            <details><summary>Does it learn names and special spellings?</summary><p>Yes. Add exact spellings to the personal dictionary, or correct the same inserted phrase twice and Talkmore safely learns it without retaining audio.</p></details>
             <details><summary>Why do I build it with Xcode?</summary><p>The open beta is not Developer ID signed or notarized yet. Building from source is the honest, safe installation path until a one-click release is ready.</p></details>
             <details><summary>Does Apple Intelligence slow down dictation?</summary><p>No. The first text insertion never waits for rewriting. Optional on-device polish happens afterward and is applied only when it is safe.</p></details>
-            <details><summary>Which permissions are required?</summary><p>Microphone and Speech Recognition power dictation. Accessibility inserts text. Input Monitoring lets Talkmore detect the fn key globally.</p></details>
+            <details><summary>Which permissions are required?</summary><p>Microphone captures voice, Accessibility inserts text, and Input Monitoring detects fn globally. Speech Recognition is recommended for the automatic Apple fallback but is optional once the high-accuracy model is ready.</p></details>
             <details><summary>Does it work in website fields and Dia?</summary><p>Yes. Browser fields use a session-focused paste path so multiprocess browsers such as Dia can route dictation into their address bar as well as website search boxes, forms, and chat composers.</p></details>
             <details><summary>Can I use it in Cursor, Codex, or a terminal?</summary><p>Yes. Developer mode is designed for coding apps and terminals, with safe paste fallback where direct accessibility insertion is unavailable.</p></details>
           </div>
@@ -191,7 +193,7 @@ export default function Home() {
 
       <footer className="siteFooter shell">
         <a className="brand" href="#top"><Image src={talkmoreIcon} alt="" width={30} height={30} /><span>Talkmore</span></a>
-        <p>Local push-to-talk dictation for Mac.</p>
+        <p>Local English push-to-talk dictation for Mac.</p>
         <div><a href={`${githubUrl}/blob/main/LICENSE`}>MIT License</a><a href={`${githubUrl}/blob/main/SECURITY.md`}>Security</a><a href={githubUrl}>GitHub</a></div>
       </footer>
     </main>

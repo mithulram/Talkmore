@@ -8,9 +8,12 @@ Talkmore is a native menu-bar application with a deliberately short hot path. Sp
 flowchart TD
     P[PushToTalkMonitor] --> A[AppCoordinator]
     A --> O[OverlayController]
-    A --> D[AppleDictationService]
+    A --> E[EnglishDictationService]
+    E --> P[ParakeetDictationService]
+    E --> D[AppleDictationService fallback]
+    P --> F[FluidAudio + Core ML]
     D --> S[Apple DictationTranscriber]
-    D --> C[FastTextCleaner]
+    E --> C[FastTextCleaner]
     C --> I[TextInserter]
     I --> X[Focused macOS app]
     I --> H[DictationHistory]
@@ -18,6 +21,8 @@ flowchart TD
     R -. safe asynchronous replacement .-> I
     T[ProductSettings] --> A
     W[PersonalDictionary] --> D
+    L[AutomaticDictionaryLearner] --> W
+    Q[ConversationalStructureFormatter] --> C
     M[DeveloperMode] --> C
 ```
 
@@ -28,21 +33,25 @@ flowchart TD
 | `TalkmoreAppDelegate` | Owns the menu-bar lifecycle and application activation behavior. |
 | `AppCoordinator` | Coordinates key state, recording, finalization, cleanup, insertion, and product state. |
 | `PushToTalkMonitor` | Observes global fn/Globe press and release without requiring an active Talkmore window. |
-| `AppleDictationService` | Captures microphone audio and manages Apple’s on-device transcription session. |
+| `EnglishDictationService` | Automatically selects the prepared English engine and falls back without exposing model choices. |
+| `ParakeetDictationService` | Streams microphone audio through Parakeet Unified English 320 ms using FluidAudio and Core ML. |
+| `AppleDictationService` | Provides the Apple on-device fallback and context-hint path. |
 | `FastTextCleaner` | Applies bounded deterministic cleanup and writing-mode commands. |
 | `AppleTextRefiner` | Optionally asks the on-device Foundation Models framework to improve inserted wording. |
 | `TextInserter` | Plans direct Accessibility insertion or a clipboard/paste fallback and protects later edits. |
 | `OverlayController` | Displays a non-activating microphone-level animation without showing live transcript text. |
 | `PersonalDictionary` | Stores exact spelling replacements locally and supplies recognition hints. |
+| `AutomaticDictionaryLearner` | Learns a repeated correction only within Talkmore's settled insertion range. |
+| `ConversationalStructureFormatter` | Converts explicit sequential English ideas or steps into numbered lists. |
 | `DictationHistory` | Stores successful dictations locally when history is enabled. |
-| `ProductSettings` | Stores language, writing style, overlay, history, and refinement preferences. |
+| `ProductSettings` | Stores writing style, overlay, history, and refinement preferences. Recognition is fixed to English. |
 
 ## Latency path
 
-1. The speech pipeline is prepared before the first recording where possible.
-2. Audio streams into Apple Speech while fn is held.
-3. On release, Talkmore requests finalization and waits inside a short bounded trailing-word window.
-4. Deterministic cleanup and dictionary replacement run synchronously.
+1. Parakeet Unified English and the Apple fallback prepare in parallel. A dictation uses Parakeet as soon as it is ready; otherwise it uses Apple Speech.
+2. Audio capture begins immediately. On the Apple path, initial buffers stay ordered behind a short gate until app and personal-dictionary hints are active.
+3. On release, Talkmore requests finalization and selects the best final or live result available inside a hard 330 ms trailing-word window.
+4. Deterministic cleanup and precompiled dictionary replacement run synchronously.
 5. Text is inserted using the safest available route.
 6. Optional Apple Intelligence refinement runs afterward and applies only if the cursor state is still compatible.
 
@@ -50,9 +59,9 @@ The visible latency measurement begins at fn release and ends after insertion co
 
 ## Privacy boundary
 
-Talkmore does not implement a network client or backend. Its data paths are microphone audio to Apple’s on-device Speech framework, text through in-process cleanup, optional text through Apple’s on-device Foundation Models framework, local app storage, and final text to the focused application.
+Talkmore does not implement a transcription backend. Its data paths are microphone audio through local Core ML or Apple Speech, text through in-process cleanup, optional text through Apple’s on-device Foundation Models framework, local app storage, and final text to the focused application. FluidAudio downloads the selected model weights from Hugging Face during first preparation; audio and transcripts are never sent there.
 
-Contributors should treat the lack of network transcription, accounts, and analytics as a product invariant. A proposal that adds network access must be explicit, opt-in, narrowly scoped, and discussed before implementation.
+Contributors should treat the lack of network transcription, accounts, and analytics as a product invariant. Network access beyond model distribution must be explicit, opt-in, narrowly scoped, and discussed before implementation.
 
 ## Insertion safety
 
@@ -69,3 +78,5 @@ Optional refinement never blindly replaces text. The insertion plan rejects repl
 - Add a writing style through settings, cleanup behavior, UI, and tests together.
 - Keep new work off the release-to-insert path unless the latency cost is measured and justified.
 - Do not add a network dependency to the core dictation loop.
+
+The [accuracy and speed roadmap](ACCURACY_ROADMAP.md) records measured acceptance gates and clean-room lessons from other local dictation projects.

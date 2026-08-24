@@ -16,18 +16,27 @@ struct PersonalDictionaryEntry: Codable, Equatable, Identifiable {
 @MainActor
 @Observable
 final class PersonalDictionary {
+    private struct CompiledReplacement {
+        let expression: NSRegularExpression
+        let template: String
+    }
+
     private(set) var entries: [PersonalDictionaryEntry]
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let key = "personalDictionary.entries"
+    @ObservationIgnored private var compiledReplacements: [CompiledReplacement]
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        let loadedEntries: [PersonalDictionaryEntry]
         if let data = defaults.data(forKey: key),
            let decoded = try? JSONDecoder().decode([PersonalDictionaryEntry].self, from: data) {
-            entries = decoded
+            loadedEntries = decoded
         } else {
-            entries = []
+            loadedEntries = []
         }
+        entries = loadedEntries
+        compiledReplacements = Self.compile(loadedEntries)
     }
 
     var speechHints: [String] {
@@ -48,27 +57,37 @@ final class PersonalDictionary {
             entries.append(PersonalDictionaryEntry(spokenForm: spoken, replacement: written))
         }
         entries.sort { $0.spokenForm.localizedCaseInsensitiveCompare($1.spokenForm) == .orderedAscending }
+        compiledReplacements = Self.compile(entries)
         persist()
         return true
     }
 
     func remove(id: UUID) {
         entries.removeAll { $0.id == id }
+        compiledReplacements = Self.compile(entries)
         persist()
     }
 
     func apply(to input: String) -> String {
+        compiledReplacements.reduce(input) { text, replacement in
+            replacement.expression.stringByReplacingMatches(
+                in: text,
+                range: NSRange(text.startIndex..<text.endIndex, in: text),
+                withTemplate: replacement.template
+            )
+        }
+    }
+
+    private static func compile(_ entries: [PersonalDictionaryEntry]) -> [CompiledReplacement] {
         entries
             .sorted { $0.spokenForm.count > $1.spokenForm.count }
-            .reduce(input) { text, entry in
+            .compactMap { entry in
                 let escaped = NSRegularExpression.escapedPattern(for: entry.spokenForm)
                 let pattern = "(?i)(?<![\\p{L}\\p{N}_])\(escaped)(?![\\p{L}\\p{N}_])"
-                guard let expression = try? NSRegularExpression(pattern: pattern) else { return text }
-                let range = NSRange(text.startIndex..<text.endIndex, in: text)
-                return expression.stringByReplacingMatches(
-                    in: text,
-                    range: range,
-                    withTemplate: NSRegularExpression.escapedTemplate(for: entry.replacement)
+                guard let expression = try? NSRegularExpression(pattern: pattern) else { return nil }
+                return CompiledReplacement(
+                    expression: expression,
+                    template: NSRegularExpression.escapedTemplate(for: entry.replacement)
                 )
             }
     }

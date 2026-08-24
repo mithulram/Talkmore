@@ -113,8 +113,10 @@ struct WritingContext: Equatable {
         case .developer:
             DeveloperTextProcessor.process(text)
         case .email:
-            EmailTextProcessor.process(text)
-        default:
+            ConversationalStructureFormatter.format(EmailTextProcessor.process(text))
+        case .automatic, .everyday, .concise:
+            ConversationalStructureFormatter.format(text)
+        case .verbatim:
             text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }

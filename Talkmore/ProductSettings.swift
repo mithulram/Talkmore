@@ -45,29 +45,11 @@ enum WritingStyle: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-enum DictationLanguage: String, CaseIterable, Codable, Identifiable {
-    case automatic
+enum DictationLanguage: String, Codable {
     case englishUS = "en_US"
-    case englishUK = "en_GB"
-    case german = "de_DE"
-    case french = "fr_FR"
-    case spanish = "es_ES"
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .automatic: "Automatic (System)"
-        case .englishUS: "English (US)"
-        case .englishUK: "English (UK)"
-        case .german: "German"
-        case .french: "French"
-        case .spanish: "Spanish"
-        }
-    }
 
     var locale: Locale {
-        self == .automatic ? .current : Locale(identifier: rawValue)
+        Locale(identifier: rawValue)
     }
 }
 
@@ -86,9 +68,7 @@ final class ProductSettings {
     var writingStyle: WritingStyle {
         didSet { defaults.set(writingStyle.rawValue, forKey: Keys.writingStyle) }
     }
-    var dictationLanguage: DictationLanguage {
-        didSet { defaults.set(dictationLanguage.rawValue, forKey: Keys.dictationLanguage) }
-    }
+    let dictationLanguage: DictationLanguage = .englishUS
     var showOverlay: Bool {
         didSet { defaults.set(showOverlay, forKey: Keys.showOverlay) }
     }
@@ -106,9 +86,6 @@ final class ProductSettings {
         writingStyle = WritingStyle(
             rawValue: defaults.string(forKey: Keys.writingStyle) ?? ""
         ) ?? .automatic
-        dictationLanguage = DictationLanguage(
-            rawValue: defaults.string(forKey: Keys.dictationLanguage) ?? ""
-        ) ?? .automatic
         showOverlay = defaults.object(forKey: Keys.showOverlay) as? Bool ?? true
         overlayPlacement = OverlayPlacement(
             rawValue: defaults.string(forKey: Keys.overlayPlacement) ?? ""
@@ -118,7 +95,6 @@ final class ProductSettings {
 
     private enum Keys {
         static let writingStyle = "product.writingStyle"
-        static let dictationLanguage = "product.dictationLanguage"
         static let showOverlay = "product.showOverlay"
         static let overlayPlacement = "product.overlayPlacement"
         static let saveHistory = "product.saveHistory"

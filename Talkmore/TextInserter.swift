@@ -21,6 +21,12 @@ struct TextInsertionReceipt {
     let caretLocation: CFIndex?
     let canReplace: Bool
     let route: TextInsertionRoute
+    let learningSnapshot: TextLearningSnapshot?
+}
+
+struct TextLearningSnapshot {
+    let documentText: String
+    let insertedRange: NSRange
 }
 
 @MainActor
@@ -86,7 +92,8 @@ final class TextInserter {
                     insertedText: text,
                     caretLocation: selectedRange(of: element)?.location,
                     canReplace: true,
-                    route: .accessibility
+                    route: .accessibility,
+                    learningSnapshot: learningSnapshot(for: element, insertedText: text)
                 )
             }
         }
@@ -133,9 +140,34 @@ final class TextInserter {
         return TextInsertionReceipt(
             element: target.element,
             insertedText: text,
-            caretLocation: nil,
+            caretLocation: target.element.flatMap(selectedRange(of:))?.location,
             canReplace: false,
-            route: .pasteboard
+            route: .pasteboard,
+            learningSnapshot: target.element.flatMap {
+                learningSnapshot(for: $0, insertedText: text)
+            }
+        )
+    }
+
+    func currentDocumentText(for receipt: TextInsertionReceipt) -> String? {
+        receipt.element.flatMap(textValue(of:))
+    }
+
+    func refreshedLearningReceipt(
+        from receipt: TextInsertionReceipt,
+        insertedText: String
+    ) -> TextInsertionReceipt? {
+        guard let element = receipt.element,
+              let snapshot = learningSnapshot(for: element, insertedText: insertedText) else {
+            return nil
+        }
+        return TextInsertionReceipt(
+            element: element,
+            insertedText: insertedText,
+            caretLocation: selectedRange(of: element)?.location,
+            canReplace: receipt.canReplace,
+            route: receipt.route,
+            learningSnapshot: snapshot
         )
     }
 
@@ -184,6 +216,30 @@ final class TextInserter {
         var range = CFRange()
         guard AXValueGetValue(axValue, .cfRange, &range) else { return nil }
         return range
+    }
+
+    private func textValue(of element: AXUIElement) -> String? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            element,
+            kAXValueAttribute as CFString,
+            &value
+        ) == .success else { return nil }
+        return value as? String
+    }
+
+    private func learningSnapshot(
+        for element: AXUIElement,
+        insertedText: String
+    ) -> TextLearningSnapshot? {
+        guard let documentText = textValue(of: element),
+              let caret = selectedRange(of: element)?.location else { return nil }
+        let length = (insertedText as NSString).length
+        guard caret >= length else { return nil }
+        return TextLearningSnapshot(
+            documentText: documentText,
+            insertedRange: NSRange(location: caret - length, length: length)
+        )
     }
 }
 

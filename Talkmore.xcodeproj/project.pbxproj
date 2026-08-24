@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C00000000000000000000001 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = C00000000000000000000002 /* FluidAudio */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		B00000000000000000000001 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -39,6 +43,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C00000000000000000000001 /* FluidAudio in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -90,6 +95,7 @@
 			);
 			name = Talkmore;
 			packageProductDependencies = (
+				C00000000000000000000002 /* FluidAudio */,
 			);
 			productName = Talkmore;
 			productReference = A00000000000000000000001 /* Talkmore.app */;
@@ -146,6 +152,9 @@
 			mainGroup = A00000000000000000000004;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A00000000000000000000005 /* Products */;
+			packageReferences = (
+				C00000000000000000000003 /* XCRemoteSwiftPackageReference "FluidAudio" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -331,6 +340,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C00000000000000000000003 /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
+			requirement = {
+				kind = revision;
+				revision = 6428e29186573c6d33c598e25d460e6690bc0ee1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C00000000000000000000002 /* FluidAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C00000000000000000000003 /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A0000000000000000000000A /* Project object */;
 }

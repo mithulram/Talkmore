@@ -3,11 +3,6 @@ import Observation
 import OSLog
 import AppKit
 
-private struct PreparedDictation {
-    let service: AppleDictationService
-    let localeIdentifier: String
-}
-
 @MainActor
 @Observable
 final class AppCoordinator {
@@ -33,14 +28,15 @@ final class AppCoordinator {
 
     private let hotkey = PushToTalkMonitor()
     private let inserter = TextInserter()
+    private let automaticDictionaryLearner = AutomaticDictionaryLearner()
     private let overlay = OverlayController()
-    private var activeDictation: AppleDictationService?
+    private let englishDictation = EnglishDictationService()
+    private var activeDictation: EnglishDictationService?
     private var activeSessionID: UUID?
     private var activeWritingContext = WritingContext.standard
     private var target: TextTarget?
     private var shortcutHeld = false
     private var hasStarted = false
-    private var preparedDictationTask: Task<PreparedDictation?, Never>?
     private let logger = Logger(subsystem: "com.mithul.talkmore", category: "Dictation")
 #if DEBUG
     private var diagnosticSignalSources: [DispatchSourceSignal] = []
@@ -49,6 +45,17 @@ final class AppCoordinator {
     init() {
         refinementEnabled = UserDefaults.standard.object(forKey: "refinementEnabled") as? Bool ?? true
         developerModeEnabled = UserDefaults.standard.object(forKey: "developerModeEnabled") as? Bool ?? true
+    }
+
+    var recognitionStatusDescription: String {
+        englishDictation.statusDescription
+    }
+
+    var setupNeedsAttention: Bool {
+        !permissions.microphoneGranted
+            || !permissions.accessibilityGranted
+            || !permissions.inputMonitoringGranted
+            || (!permissions.speechGranted && !englishDictation.isHighAccuracyReady)
     }
 
     func start() {
@@ -70,7 +77,7 @@ final class AppCoordinator {
         permissions.refresh()
         trace("Ready · \(permissionSummary)")
         if refinementEnabled { refiner.prepare() }
-        primeDictationService()
+        englishDictation.prime()
 #if DEBUG
         installDiagnosticSignals()
 #endif
@@ -79,7 +86,7 @@ final class AppCoordinator {
         // is configured. macOS can drop Input Monitoring or Accessibility after
         // a rebuild, so recover the permission flow instead of silently leaving
         // the fn hotkey inactive.
-        if !permissions.allRequiredPermissionsGranted {
+        if setupNeedsAttention {
             Task { await requestPermissions() }
         }
     }
@@ -108,27 +115,18 @@ final class AppCoordinator {
         NSPasteboard.general.setString(text, forType: .string)
     }
 
-    func setDictationLanguage(_ language: DictationLanguage) {
-        guard settings.dictationLanguage != language else { return }
-        settings.dictationLanguage = language
-        let previousPreparation = preparedDictationTask
-        preparedDictationTask = nil
-        Task {
-            if let prepared = await previousPreparation?.value {
-                await prepared.service.cancel()
-            }
-            primeDictationService()
-        }
-    }
-
     private func beginDictation() async {
         shortcutHeld = true
         guard !state.isBusy else { return }
         if case .error = state { state = .idle }
 
         permissions.refresh()
-        guard permissions.microphoneGranted, permissions.speechGranted else {
-            fail("Microphone and Speech Recognition permissions are required. Open Talkmore from the menu bar to grant them.")
+        guard permissions.microphoneGranted else {
+            fail("Microphone permission is required. Open Talkmore from the menu bar to grant it.")
+            return
+        }
+        guard permissions.speechGranted || englishDictation.isHighAccuracyReady else {
+            fail("Speech Recognition permission is needed until the high-accuracy English model is ready.")
             return
         }
 
@@ -149,13 +147,13 @@ final class AppCoordinator {
         if refinementEnabled { refiner.prepare() }
 
         let sessionID = UUID()
-        let dictation = await nextDictationService()
+        let dictation = englishDictation
         activeSessionID = sessionID
         activeDictation = dictation
 
         do {
             try await dictation.start(
-                locale: settings.dictationLanguage.locale,
+                locale: Locale(identifier: "en_US"),
                 contextualStrings: activeWritingContext.speechHints + personalDictionary.speechHints,
                 onTranscript: { [weak self] transcript in
                     guard let self, self.activeSessionID == sessionID else { return }
@@ -171,15 +169,13 @@ final class AppCoordinator {
             )
 
             state = .recording
-            trace("Recording")
+            trace("Recording · \(dictation.engineName)")
             overlay.update(state: state)
-            primeDictationService()
             if !shortcutHeld { await endDictation() }
         } catch {
             activeSessionID = nil
             activeDictation = nil
             await dictation.cancel()
-            primeDictationService()
             fail(error.localizedDescription)
         }
     }
@@ -205,10 +201,12 @@ final class AppCoordinator {
                 try await dictation.finalizeTranscription()
             }
 
-            // Finalization is already running while we wait for the latest
-            // streaming result. Settle early after a trailing update, or use a
-            // hard 330 ms deadline to preserve sub-0.5-second visible latency.
-            let settledTranscript = await waitForTrailingTranscript(startingWith: transcriptAtRelease)
+            // Finalization is already running while we wait for the best Apple
+            // result available inside the existing hard 330 ms latency budget.
+            let settledTranscript = await waitForTrailingTranscript(
+                startingWith: transcriptAtRelease,
+                dictation: dictation
+            )
             let provisional = processTranscript(settledTranscript, context: writingContext)
             activeSessionID = nil
             activeDictation = nil
@@ -290,7 +288,7 @@ final class AppCoordinator {
     }
 
     private func finalizeAndPolish(
-        dictation: AppleDictationService,
+        dictation: EnglishDictationService,
         finalizationTask: Task<String, Error>,
         receipt: TextInsertionReceipt,
         provisional: String,
@@ -305,6 +303,7 @@ final class AppCoordinator {
             )
             guard !finalTranscript.isEmpty else {
                 lastLatencySummary = String(format: "Visible %.2fs", visibleTime)
+                startCorrectionLearning(receipt)
                 return
             }
             await polishKnownTranscript(
@@ -318,30 +317,45 @@ final class AppCoordinator {
         } catch {
             await dictation.cancel()
             lastLatencySummary = String(format: "Visible %.2fs · Finalization skipped", visibleTime)
+            startCorrectionLearning(receipt)
         }
     }
 
-    private func waitForTrailingTranscript(startingWith transcriptAtRelease: String) async -> String {
+    private func waitForTrailingTranscript(
+        startingWith transcriptAtRelease: String,
+        dictation: EnglishDictationService
+    ) async -> String {
         let started = CFAbsoluteTimeGetCurrent()
-        var latest = liveTranscript
-        var observedTrailingUpdate = latest != transcriptAtRelease
+        var latest = transcriptAtRelease
         var stableTicks = 0
 
         while CFAbsoluteTimeGetCurrent() - started < 0.33 {
+            if dictation.completedTranscript != nil {
+                return DictationTranscriptPlanner.bestAvailable(
+                    completed: dictation.completedTranscript,
+                    live: latest
+                )
+            }
             try? await Task.sleep(nanoseconds: 30_000_000)
             let current = liveTranscript
             if current != latest {
                 latest = current
-                observedTrailingUpdate = true
                 stableTicks = 0
-            } else if observedTrailingUpdate {
+            } else {
                 stableTicks += 1
-                if stableTicks >= 2, CFAbsoluteTimeGetCurrent() - started >= 0.15 {
+                if DictationSettlePlanner.shouldFinishEarly(
+                    hasFinalResultAfterCapture: dictation.hasFinalResultAfterCapture,
+                    stableTicks: stableTicks,
+                    elapsed: CFAbsoluteTimeGetCurrent() - started
+                ) {
                     break
                 }
             }
         }
-        return latest
+        return DictationTranscriptPlanner.bestAvailable(
+            completed: dictation.completedTranscript,
+            live: latest
+        )
     }
 
     private func polishKnownTranscript(
@@ -357,7 +371,22 @@ final class AppCoordinator {
             : transcript
         let polished = personalDictionary.apply(to: writingContext.process(refined))
         let applied = polished == provisional || inserter.replaceIfUnchanged(receipt, with: polished)
-        if applied { lastTranscript = polished }
+        if applied {
+            lastTranscript = polished
+            if polished == provisional {
+                startCorrectionLearning(receipt)
+            } else if let settledReceipt = inserter.refreshedLearningReceipt(
+                from: receipt,
+                insertedText: polished
+            ) {
+                startCorrectionLearning(settledReceipt)
+            }
+        } else {
+            // A moved cursor usually means the user started editing before
+            // background polishing completed. Observe the original snapshot
+            // so that a real correction can still be learned.
+            startCorrectionLearning(receipt)
+        }
         let finalTime = CFAbsoluteTimeGetCurrent() - releaseTime
         lastLatencySummary = applied
             ? String(format: "Visible %.2fs · Final %.2fs", visibleTime, finalTime)
@@ -399,6 +428,14 @@ final class AppCoordinator {
         )
     }
 
+    private func startCorrectionLearning(_ receipt: TextInsertionReceipt) {
+        automaticDictionaryLearner.observe(
+            receipt: receipt,
+            inserter: inserter,
+            dictionary: personalDictionary
+        )
+    }
+
     private func recordCompatibility(target: TextTarget, receipt: TextInsertionReceipt) {
         let appName = target.applicationName ?? target.bundleIdentifier ?? "Unknown app"
         let style = activeWritingContext.resolvedStyle.title
@@ -431,33 +468,6 @@ final class AppCoordinator {
     private func trace(_ message: String, level: OSLogType = .info) {
         lastDiagnostic = message
         logger.log(level: level, "\(message, privacy: .public)")
-    }
-
-    private func primeDictationService() {
-        guard preparedDictationTask == nil else { return }
-        let locale = settings.dictationLanguage.locale
-        let localeIdentifier = locale.identifier
-        preparedDictationTask = Task {
-            let service = AppleDictationService()
-            do {
-                try await service.prepare(locale: locale)
-                return PreparedDictation(service: service, localeIdentifier: localeIdentifier)
-            } catch {
-                return nil
-            }
-        }
-    }
-
-    private func nextDictationService() async -> AppleDictationService {
-        guard let preparedDictationTask else { return AppleDictationService() }
-        let prepared = await preparedDictationTask.value
-        self.preparedDictationTask = nil
-        guard let prepared else { return AppleDictationService() }
-        guard prepared.localeIdentifier == settings.dictationLanguage.locale.identifier else {
-            await prepared.service.cancel()
-            return AppleDictationService()
-        }
-        return prepared.service
     }
 
 #if DEBUG

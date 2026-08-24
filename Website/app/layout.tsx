@@ -14,25 +14,26 @@ const geistMono = Geist_Mono({
 
 const assetBasePath = process.env.GITHUB_PAGES === 'true' ? '/Talkmore' : '';
 const talkmoreIcon = `${assetBasePath}/talkmore-icon.png`;
+const socialImage = 'https://mithulram.github.io/Talkmore/talkmore-icon.png';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://mithulram.github.io/Talkmore/'),
   title: 'Talkmore — Your voice, already written',
-  description: 'Fast, private push-to-talk dictation for Apple silicon Macs. Hold fn, speak, and release to insert clean text anywhere.',
-  keywords: ['macOS dictation', 'push to talk', 'on-device speech recognition', 'Apple silicon', 'open source'],
+  description: 'Fast, private English push-to-talk dictation for Mac with automatic on-device recognition. Hold fn, speak, and release to insert clean text anywhere.',
+  keywords: ['macOS dictation', 'English speech to text', 'push to talk', 'on-device speech recognition', 'Parakeet Unified', 'open source'],
   authors: [{ name: 'Talkmore contributors' }],
   icons: { icon: talkmoreIcon, apple: talkmoreIcon },
   openGraph: {
     type: 'website',
     title: 'Talkmore — Your voice, already written',
-    description: 'Fast, private, open-source push-to-talk dictation for Mac.',
-    images: [{ url: talkmoreIcon, width: 1254, height: 1254, alt: 'Talkmore app icon' }],
+    description: 'Fast, accurate, private English push-to-talk dictation for Mac.',
+    images: [{ url: socialImage, width: 1254, height: 1254, alt: 'Talkmore app icon' }],
   },
   twitter: {
     card: 'summary',
     title: 'Talkmore — Your voice, already written',
-    description: 'Fast, private, open-source push-to-talk dictation for Mac.',
-    images: [talkmoreIcon],
+    description: 'Fast, accurate, private English push-to-talk dictation for Mac.',
+    images: [socialImage],
   },
 };
 

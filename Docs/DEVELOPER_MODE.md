@@ -1,6 +1,6 @@
 # Developer mode
 
-Talkmore automatically enables developer mode when dictating into a supported coding app. It stays on the same local, fast path: Apple Speech receives technical vocabulary hints, and Talkmore applies deterministic formatting before the first text insertion. Apple Intelligence cleanup remains optional and runs afterward.
+Talkmore automatically enables developer mode when dictating into a supported coding app. It stays on the same local, fast English path: Talkmore applies dictionary replacements and deterministic formatting before the first text insertion, while Apple Speech fallback also receives technical vocabulary hints. Apple Intelligence cleanup remains optional and runs afterward.
 
 Developer mode is enabled by default and can be switched off from the menu bar or Settings.
 

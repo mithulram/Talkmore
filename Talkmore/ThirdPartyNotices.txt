@@ -1,0 +1,26 @@
+Talkmore third-party notices
+============================
+
+FluidAudio
+----------
+Copyright (c) FluidInference contributors.
+Source: https://github.com/FluidInference/FluidAudio
+Pinned revision: 6428e29186573c6d33c598e25d460e6690bc0ee1
+License: Apache License 2.0
+License text: FluidAudio-LICENSE.txt
+
+Talkmore links FluidAudio as an unmodified Swift package dependency. A complete
+copy of the Apache License 2.0 is bundled beside this notice.
+
+Parakeet Unified EN 0.6B - CoreML
+---------------------------------
+Creator: Fluid Inference Community
+Model: https://huggingface.co/FluidInference/parakeet-unified-en-0.6b-coreml
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+License text: https://creativecommons.org/licenses/by/4.0/legalcode
+
+The model is based on NVIDIA Parakeet (FastConformer-RNNT). Core ML conversion
+and Swift integration are by the FluidInference team. Talkmore downloads and
+uses the published model artifact without modifying its weights. Talkmore's
+selection of the 320 ms streaming tier and its surrounding capture, cleanup,
+dictionary, formatting, and insertion pipeline are separate Talkmore code.

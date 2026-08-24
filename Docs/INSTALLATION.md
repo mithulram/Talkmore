@@ -4,7 +4,9 @@ Talkmore is currently an open beta distributed from source. It is not yet Develo
 
 ## Before you start
 
-You need an Apple silicon Mac, macOS 26 or newer, Xcode 26 or newer, and a microphone. You do **not** need a paid Apple Developer account, a Talkmore account, Apple Intelligence, or a cloud API key.
+You need a Mac supported by macOS 26, Xcode 26 or newer, and a microphone. Apple silicon is recommended and uses Talkmore's high-accuracy Parakeet English model; other supported Macs use Apple Speech. You do **not** need a paid Apple Developer account, a Talkmore account, Apple Intelligence, or a cloud API key.
+
+On first launch, Apple-silicon Macs download approximately 610 MB of English model files in the background. Talkmore uses Apple Speech until the model is ready. Audio and transcripts are not uploaded.
 
 ## 1. Download the project
 
@@ -32,7 +34,7 @@ Open the Talkmore menu and follow the permission prompts.
 | Permission | System Settings location | Used for |
 | --- | --- | --- |
 | Microphone | Privacy & Security → Microphone | Recording while fn is held. |
-| Speech Recognition | Privacy & Security → Speech Recognition | On-device transcription. |
+| Speech Recognition | Privacy & Security → Speech Recognition | Apple fallback while the high-accuracy model prepares or is unavailable. |
 | Accessibility | Privacy & Security → Accessibility | Inserting text at the cursor. |
 | Input Monitoring | Privacy & Security → Input Monitoring | Detecting fn globally. |
 
@@ -54,7 +56,7 @@ Settings → General can enable on-device text polish. This is optional and neve
 
 ### The overlay appears but no text is inserted
 
-- Confirm all four permissions show as enabled.
+- Confirm Microphone, Accessibility, and Input Monitoring are enabled. Speech Recognition is strongly recommended for automatic fallback.
 - Quit and relaunch Talkmore after granting Accessibility or Input Monitoring.
 - Try TextEdit. If TextEdit works, add the affected app and your compatibility result to a [bug report](https://github.com/mithulram/Talkmore/issues/new/choose).
 - Check that the target field is editable and still focused when fn is released.
@@ -75,7 +77,7 @@ Settings → General can enable on-device text polish. This is optional and neve
 
 ### The first dictation is slow
 
-This is expected after a new installation, language change, reboot, or Apple speech-model download. Test two or three dictations before measuring the warm path.
+This is expected after a new installation, reboot, or local model download and compilation. Test two or three dictations before measuring the warm path.
 
 ### The final word is missing
 

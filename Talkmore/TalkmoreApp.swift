@@ -83,7 +83,7 @@ struct MenuBarContent: View {
             .padding(.vertical, 7)
             .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
 
-            if !coordinator.permissions.allRequiredPermissionsGranted {
+            if coordinator.setupNeedsAttention {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Setup needs attention", systemImage: "exclamationmark.shield.fill")
                         .font(.caption.weight(.semibold))
@@ -209,14 +209,8 @@ private struct GeneralSettingsView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
 
-                            Picker("Language", selection: Binding(
-                                get: { coordinator.settings.dictationLanguage },
-                                set: { coordinator.setDictationLanguage($0) }
-                            )) {
-                                ForEach(DictationLanguage.allCases) { language in
-                                    Text(language.title).tag(language)
-                                }
-                            }
+                            Label(coordinator.recognitionStatusDescription, systemImage: "waveform.and.mic")
+                                .font(.callout)
 
                             Toggle("Polish after instant insertion", isOn: Binding(
                                 get: { coordinator.refinementEnabled },
@@ -260,7 +254,7 @@ private struct GeneralSettingsView: View {
                 SettingsCard(title: "Setup", symbol: "checkmark.shield") {
                     VStack(spacing: 10) {
                         PermissionRow(label: "Microphone", granted: coordinator.permissions.microphoneGranted)
-                        PermissionRow(label: "Speech Recognition", granted: coordinator.permissions.speechGranted)
+                        PermissionRow(label: "Speech Recognition fallback", granted: coordinator.permissions.speechGranted)
                         PermissionRow(label: "Accessibility", granted: coordinator.permissions.accessibilityGranted)
                         PermissionRow(label: "Input Monitoring", granted: coordinator.permissions.inputMonitoringGranted)
                         Divider()
